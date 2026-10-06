@@ -4,9 +4,7 @@ gemeinsame Parser für die Produktkacheln beider Generationen:
 - Shopware 6: <div class="product-box"> (Pirscher Gear, Recon, Alljagd)
 - Shopware 5: <div class="product--box"> (Sportwaffen Triebel)
 
-Suche nur bei Shops, deren robots.txt /search erlaubt. Recon und Alljagd
-sperren /search und alle URLs mit "?" -> dort nur Kategorie-/Produktseiten über
-die URL-Beobachtung (sources/url.py).
+Genutzt von sources/shops.py (Suche) und sources/url.py (Kategorieseiten).
 """
 import json
 from urllib.parse import urljoin
@@ -89,29 +87,3 @@ def parse_sw5_boxes(html: str, site: str, base: str) -> list[Listing]:
             available=_availability(delivery.get_text(" ", strip=True)) if delivery else None,
         ))
     return results
-
-
-def _check(results: list, html: str, label: str, marker: str) -> list:
-    lower = html.lower()
-    if not results and marker not in html and not any(m in lower for m in ("keine artikel", "keine produkte",
-                                                                            "no result", "no products")):
-        raise SourceError(f"{label}: Ergebnisliste nicht gefunden (Seitenstruktur geändert?)")
-    return results
-
-
-# ----------------------------------------------------------------------
-# Konkrete Shops mit erlaubter Suche
-# ----------------------------------------------------------------------
-
-PIRSCHER_BASE = "https://www.pirschergear.com"
-TRIEBEL_BASE = "https://sportwaffen-triebel.de"
-
-
-def search_pirschergear(watch: dict, session) -> list[Listing]:
-    r = get(session, f"{PIRSCHER_BASE}/search", params={"search": watch["query"]})
-    return _check(parse_sw6_boxes(r.text, "pirschergear", PIRSCHER_BASE), r.text, "Pirscher Gear", "product-box")
-
-
-def search_triebel(watch: dict, session) -> list[Listing]:
-    r = get(session, f"{TRIEBEL_BASE}/search", params={"sSearch": watch["query"]})
-    return _check(parse_sw5_boxes(r.text, "triebel", TRIEBEL_BASE), r.text, "Sportwaffen Triebel", "product--box")

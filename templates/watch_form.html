@@ -1,5 +1,14 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }} · Gear Watcher{% endblock %}
+{% block title %}{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }} · Gear Watcher<script>
+  document.querySelectorAll("[data-toggle-group]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var on = btn.dataset.on === "1";
+      document.querySelectorAll('[data-group="' + btn.dataset.toggleGroup + '"] input[type=checkbox]')
+        .forEach(function (cb) { cb.checked = on; });
+    });
+  });
+</script>
+{% endblock %}
 {% block content %}
 {% set w = watch or {} %}
 <h1>{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }}</h1>
@@ -15,13 +24,18 @@
     <legend>Quellen für den Suchbegriff</legend>
     {% set chosen = (w.sites if w.sites is defined and w.sites is not none else 'egun,kleinanzeigen,frankonia_kleinanzeigen').split(',') %}
     {% for kind, heading in [('classifieds', 'Kleinanzeigen & Auktionen – meldet neue Angebote'), ('shop', 'Shops (Neuware) – meldet neue Produkte, Preissenkungen, wieder lieferbar')] %}
-      <p class="small"><strong>{{ heading }}</strong></p>
+      <p class="small group-head"><strong>{{ heading }}</strong>
+        <button type="button" class="btn-small btn-secondary" data-toggle-group="{{ kind }}" data-on="1">alle</button>
+        <button type="button" class="btn-small btn-secondary" data-toggle-group="{{ kind }}" data-on="0">keine</button>
+      </p>
+      <div class="source-grid" data-group="{{ kind }}">
       {% for key, src in SOURCES.items() if src.kind == kind and not src.hidden %}
       {% set missing = src.needs | default([]) | reject('in', configured) | list %}
       <label class="check"><input type="checkbox" name="sites" value="{{ key }}" {{ 'checked' if key in chosen }}> {{ src.label }}
         {% if missing %}<span class="muted small">– erst unter <a href="{{ url_for('settings_page') }}">Einstellungen</a> API-Zugang eintragen</span>{% endif %}
       </label>
       {% endfor %}
+      </div>
     {% endfor %}
   </fieldset>
 
@@ -32,9 +46,10 @@
     </label>
     <p class="muted small">
       <strong>Produktseite</strong>: meldet Preissenkungen und „wieder lieferbar“.
-      <strong>Kategorieseite</strong> (Shopware-Shops wie Recon, Alljagd, Pirscher Gear, Triebel; Frankonia):
-      meldet neue Produkte – ein Suchbegriff wirkt dort als Titelfilter (alle Wörter müssen vorkommen).
-      Für Recon und Alljagd der einzige Weg, deren Suche ist per robots.txt gesperrt.
+      <strong>Kategorieseite</strong> (Shopware-, JTL- und Frankonia-Shops): meldet neue Produkte – ein
+      Suchbegriff wirkt dort als Titelfilter (alle Wörter müssen vorkommen).
+      Einziger Weg für <strong>Recon, Alljagd, Living Active, Volber</strong> (Suche per robots.txt gesperrt)
+      und <strong>TACWRK</strong> (Suche nur per JavaScript).
       Seiten, deren robots.txt den Abruf verbietet, werden übersprungen.
     </p>
   </fieldset>

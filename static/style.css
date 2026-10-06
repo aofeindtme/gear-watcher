@@ -151,12 +151,19 @@ input[type=checkbox] { width: auto; }
 .badge.new { background: var(--new); color: #fff; }
 .badge.star { background: var(--star); color: #fff; }
 .listing .price .drop { color: var(--accent); font-weight: 600; font-size: 0.85rem; }
+.group-head { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin: 0.6rem 0 0.3rem; }
+.group-head strong { margin-right: 0.4rem; }
+.source-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 0.8rem; }
+.source-grid label.check { margin-bottom: 0.4rem; }
 .badge.soldout { background: var(--danger); color: #fff; }
 .site-frankonia_kleinanzeigen, .site-frankonia { background: #1f4e3d; color: #fff; }
 .site-ebay { background: #0064d2; color: #fff; }
 .site-pirschergear { background: #5a4a2f; color: #fff; }
 .site-triebel { background: #34495e; color: #fff; }
 .site-url { background: #6b5b95; color: #fff; }
+.site-pirschershop, .site-hubertus, .site-grube, .site-jagd_de, .site-jagdwelt24 { background: #4a5d23; color: #fff; }
+.site-revolutionrace { background: #c0392b; color: #fff; }
+.site-shootingequipment, .site-atlas, .site-shootingsolutions, .site-doublealpha, .site-sfc { background: #2c3e50; color: #fff; }
 textarea { font: inherit; padding: 0.45rem 0.55rem; border: 1px solid var(--border); border-radius: 6px;
   background: var(--card); color: var(--text); width: 100%; }
 

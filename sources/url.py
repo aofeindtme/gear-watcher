@@ -5,12 +5,14 @@ ein ganz bestimmtes Produkt, dessen Preis/Verfügbarkeit man verfolgen will.
 
 - Produktseite: Preis + Verfügbarkeit aus schema.org-Microdata/JSON-LD
   (fast alle Shopsysteme liefern das), Frankonia über sein Tracking-Attribut.
-- Kategorie-/Listenseite: Shopware-5/6- oder Frankonia-Kacheln -> jedes neue
+- Kategorie-/Listenseite: Shopware-5/6-, Frankonia- oder schema.org-Kacheln
+  (JTL u.a.) -> jedes neue
   Produkt dort ist ein neuer Treffer.
 
 Vor jedem Abruf wird die robots.txt des Shops geprüft.
 """
 import json
+import re
 import time
 import urllib.robotparser
 from urllib.parse import urlparse
@@ -18,7 +20,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
 from . import USER_AGENT, Listing, SourceError, get, http_session, parse_price, to_float
-from . import frankonia, shopware
+from . import frankonia, shops, shopware
 
 _robots_cache: dict[str, tuple[float, urllib.robotparser.RobotFileParser | None]] = {}
 ROBOTS_TTL = 24 * 3600
@@ -142,15 +144,20 @@ def fetch_url(url: str, query: str | None, session) -> list[Listing]:
             return [item]
         items = frankonia.parse_tiles(html)
     else:
-        soup_probe = html[:2_000_000]
-        is_product = 'og:type" content="product"' in soup_probe or "itemprop=\"price\"" in soup_probe \
-            or '"@type":"Product"' in soup_probe.replace(" ", "")
-        # Produktseiten enthalten oft "Ähnliche Produkte"-Kacheln -> Produkt zuerst
-        if is_product:
+        # og:type=product ist ein eindeutiges Produktseiten-Signal; Produktseiten haben oft
+        # zusätzlich "Ähnliche Produkte"-Kacheln, deshalb dann Produkt zuerst.
+        og_product = re.search(r'property="og:type"\s+content="product"', html) is not None
+        if og_product:
             item = parse_product_page(html, url)
             if item:
                 return [item]
-        items = shopware.parse_sw6_boxes(html, "url", url) or shopware.parse_sw5_boxes(html, "url", url)
+        items = shopware.parse_sw6_boxes(html, "url", url) or shopware.parse_sw5_boxes(html, "url", url) \
+            or shops.parse_microdata_list(html, "url", url)
+        # Ab zwei Kacheln ist es eine Liste - auch wenn einzelne Preise als Microdata markiert sind (JTL)
+        if len(items) < 2 and not og_product:
+            item = parse_product_page(html, url)
+            if item:
+                return [item]
         if not items:
             raise SourceError(f"{host}: Seite nicht erkannt (weder Produktseite mit Preis noch bekannte Produktliste)")
 

@@ -28,8 +28,15 @@ per [ntfy](https://ntfy.sh) aufs Handy. Ziel: Dinge möglichst günstig bekommen
 | Frankonia-Kleinanzeigen | Kleinanzeigen/Auktionen | Preis, PLZ/Umkreis | |
 | eBay | Auktionen/Sofortkauf | Preis, Zustand | offizielle Browse-API, Zugangsdaten unter Einstellungen |
 | Frankonia | Shop | – | |
-| Pirscher Gear | Shop (Shopware 6) | – | pirschergear**.com** (die .de ist geparkt) |
-| Sportwaffen Triebel | Shop (Shopware 5) | – | |
+| Pirscher Gear, Pirscher Shop, Hubertus Fieldsports | Shop (Shopware 6) | – | Pirscher Gear = pirschergear**.com** |
+| Sportwaffen Triebel, Atlas Taktik | Shop (Shopware 5) | – | |
+| Jagdwelt24, Shooting Solutions | Shop (JTL, schema.org) | – | |
+| Grube | Shop (novomind, JSON im Seitenzustand) | – | |
+| jagd.de (Askari) | Shop (OXID) | – | sortiert nach "neu" |
+| Revolution Race | Shop (Nuxt) | – | |
+| Shooting Equipment | Shop (WooCommerce Store-API, JSON) | – | |
+| Double Alpha | Shop | – | |
+| Shooters First Choice | Shop (modified eCommerce) | – | |
 | **Shop-URLs** | Produkt- oder Kategorieseiten | – | siehe unten |
 
 Ausschlusswörter und Preisgrenzen werden zusätzlich generisch nachgefiltert.
@@ -40,8 +47,9 @@ eingetragen werden:
   Preissenkungen und "wieder lieferbar".
 - **Kategorieseite** (Shopware-5/6-Shops, Frankonia): meldet neue Produkte; ein
   Suchbegriff wirkt dort als Titelfilter.
-- Vor jedem Abruf wird die `robots.txt` geprüft. Für **Recon Company** und **Alljagd** ist
-  das der einzige Weg - beide sperren ihre Suche per robots.txt.
+- Vor jedem Abruf wird die `robots.txt` geprüft. Einziger Weg für **Recon Company**,
+  **Alljagd**, **Living Active** und **Volber** (Suche per robots.txt gesperrt) sowie
+  **TACWRK** (Suche läuft nur per JavaScript über einen Drittanbieter).
 
 **Bewusst nicht dabei:**
 - **Brownells** - brownells.de ist eine geparkte Domain, der echte Shop
@@ -49,8 +57,13 @@ eingetragen werden:
 - **Amazon** - blockt Scraper, die offizielle API setzt ein Partnerkonto mit Umsätzen
   voraus. Option für später: Keepa-API (kostenpflichtig).
 - **Waffen Schumacher** - waffenschumacher.com hat keinen Online-Shop (WordPress-Seite).
+- **IPSC Store** (ipscstore.com) - Cloudflare-Bot-Sperre.
+- **Sportshooter** (sportshooter.de) - Produkte werden nur per JavaScript geladen, keine
+  Sitemap; weder Suche noch Kategorie-/Produktseiten sind ohne Browser auslesbar.
 
-Neue Quelle hinzufügen: Modul in `sources/` mit `search(watch, session) -> list[Listing]`
+Neuen Shop hinzufügen: läuft er auf einem schon unterstützten System (Shopware 5/6, JTL,
+WooCommerce, ...), reicht ein Eintrag in `SHOPS` in `sources/shops.py`. Sonst Parser dort
+ergänzen oder eigenes Modul in `sources/` mit `search(watch, session) -> list[Listing]`
 anlegen und in `sources/__init__.py` in `SOURCES` eintragen. Vorher `robots.txt` der Seite
 prüfen und nur erlaubte Pfade abfragen.
 

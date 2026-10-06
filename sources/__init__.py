@@ -113,7 +113,7 @@ def to_float(value) -> float | None:
 # kind:    classifieds = Kleinanzeigen/Auktionen, shop = Neuware
 # filters: was die Seite selbst filtert (Rest filtert watcher.apply_filters)
 # needs:   Einstellungen, ohne die die Quelle nicht nutzbar ist
-from . import ebay, egun, frankonia, frankonia_kleinanzeigen, kleinanzeigen, shopware, url  # noqa: E402
+from . import ebay, egun, frankonia, frankonia_kleinanzeigen, kleinanzeigen, shops, url  # noqa: E402
 
 SOURCES = {
     "egun": {"label": "eGun", "kind": "classifieds", "search": egun.search,
@@ -125,10 +125,9 @@ SOURCES = {
     "ebay": {"label": "eBay", "kind": "classifieds", "search": ebay.search,
              "filters": {"price", "condition"}, "needs": ("ebay_client_id", "ebay_client_secret")},
     "frankonia": {"label": "Frankonia", "kind": "shop", "search": frankonia.search, "filters": set()},
-    "pirschergear": {"label": "Pirscher Gear", "kind": "shop", "search": shopware.search_pirschergear,
-                     "filters": set()},
-    "triebel": {"label": "Sportwaffen Triebel", "kind": "shop", "search": shopware.search_triebel,
-                "filters": set()},
+    # alle weiteren Shops aus sources/shops.py (konfigurationsgetrieben)
+    **{key: {"label": shop["label"], "kind": "shop", "search": shops.make_search(key), "filters": set()}
+       for key, shop in shops.SHOPS.items() if shop},
     # Kein Häkchen im Formular: läuft automatisch, sobald eine Suche URLs enthält.
     "url": {"label": "Shop-URL", "kind": "shop", "search": url.search, "filters": set(), "hidden": True},
 }
