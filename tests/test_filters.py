@@ -87,3 +87,12 @@ def test_url_product_page_jsonld():
       "offers":{"price":"499.00","availability":"https://schema.org/InStock"}}</script>"""
     item = url.parse_product_page(html, "https://www.shop.de/p/2")
     assert (item.title, item.price, item.available, item.image) == ("ZF", 499.0, True, "https://i/x.jpg")
+
+
+def test_require_all_words_any_order():
+    items = [L("Leica Amplus 6 2,5-15x56", 900), L("Amplus Leica Zielfernrohr", 800),
+             L("Leica Fernglas", 500), L("Zeiss Conquest", 700)]
+    w = {"query": "amplus leica", "require_all_words": 1}
+    assert [i.title for i in apply_filters(w, items, set())] == ["Leica Amplus 6 2,5-15x56", "Amplus Leica Zielfernrohr"]
+    w["require_all_words"] = 0
+    assert len(apply_filters(w, items, set())) == 4

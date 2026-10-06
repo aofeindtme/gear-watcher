@@ -22,7 +22,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setitem(watcher.SOURCES, "fake", {"label": "Fake", "kind": "classifieds", "filters": set(),
                                                   "search": lambda w, s: list(results["items"])})
     wid = db.save_watch(uid, {"name": "ZF", "query": "zf", "sites": "fake", "interval_min": 60,
-                              "notify_price_drop": 1, "active": 1})
+                              "notify_price_drop": 1, "active": 1, "require_all_words": 0})
     return db, watcher, uid, wid, results, sent
 
 

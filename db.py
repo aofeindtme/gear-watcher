@@ -25,13 +25,14 @@ USER_SETTING_DEFAULTS = {
 WATCH_FIELDS = [
     "name", "query", "sites", "min_price", "max_price", "zip_code", "radius_km",
     "condition", "exclude_words", "search_description", "interval_min",
-    "notify_price_drop", "active", "urls",
+    "notify_price_drop", "active", "urls", "require_all_words",
 ]
 
 # Spalten, die nach der ersten Version dazukamen: (Tabelle, Spalte, Definition)
 MIGRATIONS = [
     ("watches", "urls", "TEXT"),
     ("listings", "available", "INTEGER"),
+    ("watches", "require_all_words", "INTEGER NOT NULL DEFAULT 1"),
 ]
 
 

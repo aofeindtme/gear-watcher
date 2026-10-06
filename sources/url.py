@@ -158,7 +158,8 @@ def fetch_url(url: str, query: str | None, session) -> list[Listing]:
         i.site = "url"
         i.ext_id = i.url
         i.location = host
-    # Auf Listenseiten wirkt der Suchbegriff als Titelfilter (alle Wörter müssen vorkommen)
+    # Auf Listenseiten wirkt der Suchbegriff immer als Titelfilter (alle Wörter müssen
+    # vorkommen) - unabhängig vom Häkchen, sonst käme jedes Produkt der Kategorie
     return [i for i in items if _title_matches(i.title, query)]
 
 

@@ -159,6 +159,7 @@ def _watch_from_form(form) -> tuple[dict, list[str]]:
         "condition": form.get("condition", ""),
         "exclude_words": form.get("exclude_words", "").strip(),
         "search_description": int(bool(form.get("search_description"))),
+        "require_all_words": int(bool(form.get("require_all_words"))),
         "notify_price_drop": int(bool(form.get("notify_price_drop"))),
         "active": int(bool(form.get("active"))),
         "urls": "\n".join(urls),

@@ -6,6 +6,9 @@
 {% for e in errors %}<div class="error">{{ e }}</div>{% endfor %}
 <form method="post" class="card form">
   <label>Suchbegriff <input name="query" value="{{ w.query or '' }}" placeholder="z. B. Leica Amplus 6"></label>
+  <label class="check"><input type="checkbox" name="require_all_words" {{ 'checked' if w.require_all_words is not defined or w.require_all_words is none or w.require_all_words }}>
+    Alle Wörter müssen im Titel vorkommen (Reihenfolge egal)</label>
+  <p class="muted small">Ohne Häkchen entscheidet die jeweilige Website, was passt - Shops liefern dann oft auch Treffer, die nur eines der Wörter enthalten.</p>
   <label>Name (optional) <input name="name" value="{{ w.name or '' }}" placeholder="wie der Suchbegriff"></label>
 
   <fieldset>

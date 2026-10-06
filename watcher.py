@@ -26,15 +26,23 @@ def split_words(text: str | None) -> list[str]:
     return [w.strip().lower() for w in (text or "").split(",") if w.strip()]
 
 
+def query_words(query: str | None) -> list[str]:
+    """Suchbegriff in Einzelwörter; Reihenfolge egal, Teilwort reicht ("amplus" trifft "Amplus6")."""
+    return [w.strip(".,;:!?\"'()").lower() for w in (query or "").split() if w.strip(".,;:!?\"'()")]
+
+
 def apply_filters(watch: dict, listings: list, site_filters: set) -> list:
     """Generische Nachfilterung für alles, was die Quelle nicht selbst kann
     (und als Sicherheitsnetz für Preisfilter, die Seiten teils lax auslegen)."""
     excludes = split_words(watch.get("exclude_words"))
+    required = query_words(watch.get("query")) if watch.get("require_all_words", 1) else []
     min_p, max_p = watch.get("min_price"), watch.get("max_price")
     out = []
     for item in listings:
         title = item.title.lower()
         if any(w in title for w in excludes):
+            continue
+        if any(w not in title for w in required):
             continue
         # Auktionen: aktuelles Gebot ist kein Endpreis -> Preisfilter nur, wenn
         # die Seite ihn selbst anwendet (dort zählt dann ihre Logik).
