@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Suchen · Gear Watcher{% endblock %}
+{% block content %}
+<div class="pagehead">
+  <h1>Suchen</h1>
+  <a href="{{ url_for('watch_form') }}" class="button">+ Neue Suche</a>
+</div>
+{% if not watches %}<div class="empty card">Noch keine Suche angelegt.</div>{% endif %}
+{% for w in watches %}
+<section class="card watch {{ '' if w.active else 'inactive' }}" id="w{{ w.id }}">
+  <div class="watch-head">
+    <h2>{{ w.name }} {% if not w.active %}<span class="badge">pausiert</span>{% endif %}</h2>
+    <a href="{{ url_for('dashboard', watch=w.id) }}">{{ w.total_count }} Treffer{% if w.new_count %}, <strong>{{ w.new_count }} neu</strong>{% endif %}</a>
+  </div>
+  <div class="muted">
+    „{{ w.query }}“
+    {% if w.min_price is not none or w.max_price is not none %} · {{ fmt_price(w.min_price) if w.min_price is not none else '0 €' }} – {{ fmt_price(w.max_price) if w.max_price is not none else '∞' }}{% endif %}
+    {% if w.zip_code %} · {{ w.zip_code }} +{{ w.radius_km }} km{% endif %}
+    {% if w.condition %} · {{ {'new': 'neu', 'used': 'gebraucht'}[w.condition] }}{% endif %}
+    {% if w.exclude_words %} · ohne: {{ w.exclude_words }}{% endif %}
+    · alle {{ w.interval_min }} min
+    {% if w.cheapest_now is not none %} · aktuell ab <strong>{{ fmt_price(w.cheapest_now) }}</strong>{% endif %}
+  </div>
+  <ul class="sites">
+    {% for site in w.sites.split(',') if site %}
+      {% set st = states[w.id].get(site) %}
+      <li>
+        <strong>{{ SOURCES[site].label if site in SOURCES else site }}</strong>:
+        {% if not st %}<span class="muted">noch nicht abgerufen</span>
+        {% elif st.last_error %}<span class="error-text">Fehler – {{ st.last_error }}</span>
+        {% else %}{{ st.last_count }} Treffer <span class="muted">({{ st.last_run_at | localtime }})</span>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  <div class="actions">
+    <form method="post" action="{{ url_for('watch_run', watch_id=w.id) }}" class="inline"><button type="submit" class="btn-small">Jetzt abrufen</button></form>
+    <a href="{{ url_for('watch_form', watch_id=w.id) }}" class="button btn-small btn-secondary">Bearbeiten</a>
+    <form method="post" action="{{ url_for('watch_toggle', watch_id=w.id) }}" class="inline"><button type="submit" class="btn-small btn-secondary">{{ 'Pausieren' if w.active else 'Fortsetzen' }}</button></form>
+    <form method="post" action="{{ url_for('watch_delete', watch_id=w.id) }}" class="inline delete-form">
+      <label class="confirm"><input type="checkbox" required> sicher</label>
+      <button type="submit" class="btn-small btn-danger">Löschen</button>
+    </form>
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

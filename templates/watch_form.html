@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }} · Gear Watcher{% endblock %}
+{% block content %}
+{% set w = watch or {} %}
+<h1>{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }}</h1>
+{% for e in errors %}<div class="error">{{ e }}</div>{% endfor %}
+<form method="post" class="card form">
+  <label>Suchbegriff <input name="query" value="{{ w.query or '' }}" required placeholder="z. B. Leica Amplus 6"></label>
+  <label>Name (optional) <input name="name" value="{{ w.name or '' }}" placeholder="wie der Suchbegriff"></label>
+
+  <fieldset>
+    <legend>Quellen</legend>
+    {% set chosen = (w.sites or ','.join(SOURCES.keys())).split(',') %}
+    {% for key, src in SOURCES.items() %}
+    <label class="check"><input type="checkbox" name="sites" value="{{ key }}" {{ 'checked' if key in chosen }}> {{ src.label }}
+      <span class="muted small">({{ 'Kleinanzeigen/Auktionen' if src.kind == 'classifieds' else 'Shop' }})</span></label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Filter</legend>
+    <div class="row">
+      <label>Preis ab (€) <input name="min_price" inputmode="decimal" value="{{ w.min_price if w.min_price is not none else '' }}"></label>
+      <label>Preis bis (€) <input name="max_price" inputmode="decimal" value="{{ w.max_price if w.max_price is not none else '' }}"></label>
+    </div>
+    <div class="row">
+      <label>PLZ <input name="zip_code" inputmode="numeric" maxlength="5" value="{{ w.zip_code or '' }}"></label>
+      <label>Umkreis (km) <input name="radius_km" inputmode="numeric" value="{{ w.radius_km or '' }}"></label>
+    </div>
+    <p class="muted small">Umkreis wird auf die nächste Stufe der jeweiligen Seite aufgerundet. Leer lassen = bundesweit.</p>
+    <label>Zustand
+      <select name="condition">
+        {% for val, label in [('', 'egal'), ('new', 'neu'), ('used', 'gebraucht')] %}
+        <option value="{{ val }}" {{ 'selected' if (w.condition or '') == val }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="muted small">Zustand filtert derzeit nur eGun direkt.</p>
+    <label>Ausschlusswörter (kommagetrennt) <input name="exclude_words" value="{{ w.exclude_words or '' }}" placeholder="z. B. suche, defekt, nerf, airsoft"></label>
+    <label class="check"><input type="checkbox" name="search_description" {{ 'checked' if w.search_description }}> Auch in Beschreibungen suchen (eGun)</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Benachrichtigung</legend>
+    <label>Abrufen alle … Minuten <input name="interval_min" inputmode="numeric" value="{{ w.interval_min or 60 }}"></label>
+    <p class="muted small">Minimum 15 Minuten.</p>
+    <label class="check"><input type="checkbox" name="notify_price_drop" {{ 'checked' if w.notify_price_drop is not defined or w.notify_price_drop is none or w.notify_price_drop }}> Auch bei Preissenkung bekannter Angebote benachrichtigen</label>
+    <label class="check"><input type="checkbox" name="active" {{ 'checked' if w.active is not defined or w.active is none or w.active }}> Aktiv</label>
+  </fieldset>
+
+  <div class="actions">
+    <button type="submit">Speichern</button>
+    <a href="{{ url_for('watches_page') }}" class="button btn-secondary">Abbrechen</a>
+  </div>
+</form>
+{% endblock %}

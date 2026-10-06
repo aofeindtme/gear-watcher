@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Treffer · Gear Watcher{% endblock %}
+{% block content %}
+<form method="get" class="filterbar">
+  <select name="watch" onchange="this.form.submit()">
+    <option value="">Alle Suchen</option>
+    {% for w in watches %}
+    <option value="{{ w.id }}" {{ 'selected' if f_watch == w.id }}>{{ w.name }}{% if w.new_count %} ({{ w.new_count }} neu){% endif %}</option>
+    {% endfor %}
+  </select>
+  <select name="status" onchange="this.form.submit()">
+    {% for val, label in [('active', 'Alle außer ausgeblendet'), ('new', 'Neu'), ('star', 'Gemerkt'), ('seen', 'Gesehen'), ('hidden', 'Ausgeblendet'), ('all', 'Wirklich alle')] %}
+    <option value="{{ val }}" {{ 'selected' if f_status == val }}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="site" onchange="this.form.submit()">
+    <option value="">Alle Quellen</option>
+    {% for key, src in SOURCES.items() %}
+    <option value="{{ key }}" {{ 'selected' if f_site == key }}>{{ src.label }}</option>
+    {% endfor %}
+  </select>
+  <noscript><button type="submit">Filtern</button></noscript>
+</form>
+<form method="post" action="{{ url_for('listings_mark_seen') }}" class="inline">
+  <input type="hidden" name="watch" value="{{ f_watch or '' }}">
+  <button type="submit" class="btn-secondary">Alle als gesehen markieren</button>
+</form>
+
+{% if not watches %}
+<div class="empty card">
+  Noch keine Suche angelegt. <a href="{{ url_for('watch_form') }}">Erste Suche anlegen →</a>
+</div>
+{% elif not listings %}
+<div class="empty card">Keine Treffer für diese Auswahl.</div>
+{% endif %}
+
+<div class="grid">
+{% for l in listings %}
+  <article class="listing status-{{ l.status }}">
+    <a href="{{ l.url }}" target="_blank" rel="noopener noreferrer" class="thumb">
+      {% if l.image %}<img src="{{ l.image }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+    </a>
+    <div class="body">
+      <div class="meta">
+        <span class="site site-{{ l.site }}">{{ SOURCES[l.site].label if l.site in SOURCES else l.site }}</span>
+        {% if l.status == 'new' %}<span class="badge new">neu</span>{% endif %}
+        {% if l.status == 'star' %}<span class="badge star">★</span>{% endif %}
+        {% if l.is_auction %}<span class="badge">Auktion</span>{% endif %}
+        <span class="muted">{{ l.watch_name }}</span>
+      </div>
+      <a href="{{ l.url }}" target="_blank" rel="noopener noreferrer" class="title">{{ l.title }}</a>
+      <div class="price">
+        {{ l.price_text or fmt_price(l.price) }}
+        {% if l.lowest_price is not none and l.price is not none and l.lowest_price < l.price %}
+          <span class="muted">· Tiefst {{ fmt_price(l.lowest_price) }}</span>
+        {% endif %}
+      </div>
+      <div class="muted small">
+        {{ [l.location, l.condition, l.posted] | select | join(' · ') }}
+        · gefunden {{ l.first_seen | localtime }}
+      </div>
+      <div class="actions">
+        {% for st, label in [('star', '★ Merken'), ('seen', 'Gesehen'), ('hidden', 'Ausblenden')] if st != l.status %}
+        <form method="post" action="{{ url_for('listing_status', listing_id=l.id) }}" class="inline">
+          <input type="hidden" name="status" value="{{ st }}">
+          <button type="submit" class="btn-small">{{ label }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
+  </article>
+{% endfor %}
+</div>
+{% endblock %}

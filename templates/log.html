@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Protokoll · Gear Watcher{% endblock %}
+{% block content %}
+<h1>Protokoll</h1>
+<div class="card table-wrap">
+<table class="log">
+  <thead><tr><th>Zeit</th><th>Stufe</th><th>Suche</th><th>Meldung</th></tr></thead>
+  <tbody>
+  {% for e in entries %}
+    <tr class="level-{{ e.level|lower }}">
+      <td class="nowrap">{{ e.ts | localtime }}</td>
+      <td>{{ e.level }}</td>
+      <td>{{ e.watch_name or '' }}</td>
+      <td>{{ e.message }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">Noch keine Einträge.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

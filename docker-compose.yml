@@ -1,0 +1,32 @@
+services:
+  gear-watcher:
+    image: ghcr.io/aofeindtme/gear-watcher:latest
+    pull_policy: always
+    container_name: gear-watcher
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-5030}:5000"
+    volumes:
+      # SQLite-Datei (Suchen, Treffer, Preisverlauf, Nutzer).
+      #
+      # Ohne DATA_PATH landet sie im benannten Volume "gear-watcher-data" statt
+      # in einem relativen Ordner: "./data" würde bei Portainer-Stacks
+      # (Git-Repository-Methode) gegen Portainers container-internes
+      # Stack-Verzeichnis aufgelöst und bei einem Redeploy still an einer
+      # neuen, ungesicherten Stelle neu angelegt.
+      #
+      # Für direkten Dateizugriff/Backups DATA_PATH auf einen ABSOLUTEN Pfad in
+      # einem Shared Folder setzen (z.B. /volume2/docker/gear-watcher/data),
+      # den Ordner vorher per SSH anlegen (mkdir -p).
+      - ${DATA_PATH:-gear-watcher-data}:/data
+    environment:
+      DB_PATH: "/data/gear_watcher.db"
+      TZ: "Europe/Berlin"
+      # Nur beim ALLERERSTEN Start relevant (legt den ersten Account an).
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:?bitte ADMIN_PASSWORD setzen, siehe .env.example}"
+      # true, wenn das Dashboard nur über einen HTTPS-Reverse-Proxy erreichbar ist.
+      SECURE_COOKIES: "${SECURE_COOKIES:-false}"
+
+volumes:
+  gear-watcher-data:

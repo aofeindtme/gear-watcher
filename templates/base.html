@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Gear Watcher{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if user %}
+  <nav class="topnav">
+    <a class="brand" href="{{ url_for('dashboard') }}">Gear Watcher</a>
+    <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Treffer</a>
+    <a href="{{ url_for('watches_page') }}" class="{{ 'active' if request.endpoint in ('watches_page', 'watch_form') }}">Suchen</a>
+    <a href="{{ url_for('settings_page') }}" class="{{ 'active' if request.endpoint == 'settings_page' }}">Einstellungen</a>
+    <a href="{{ url_for('log_page') }}" class="{{ 'active' if request.endpoint == 'log_page' }}">Protokoll</a>
+    <span class="nav-spacer"></span>
+    <form method="post" action="{{ url_for('logout') }}" class="inline">
+      <button type="submit" class="btn-link">Abmelden</button>
+    </form>
+  </nav>
+  {% endif %}
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

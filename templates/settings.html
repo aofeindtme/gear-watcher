@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen · Gear Watcher{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+<form method="post" class="card form">
+  <h2>ntfy</h2>
+  <label>Server <input name="ntfy_server" value="{{ settings.ntfy_server }}" placeholder="https://ntfy.sh"></label>
+  <label>Topic <input name="ntfy_topic" value="{{ settings.ntfy_topic }}" placeholder="z. B. gear-watcher-xyz123"></label>
+  <p class="muted small">Auf ntfy.sh sind Topics öffentlich lesbar, wenn man den Namen kennt - einen schwer zu erratenden Namen wählen.</p>
+  <label>Access-Token (optional) <input name="ntfy_token" type="password" value="{{ settings.ntfy_token }}" autocomplete="off"></label>
+  <div class="row">
+    <label>oder Benutzer <input name="ntfy_user" value="{{ settings.ntfy_user }}" autocomplete="off"></label>
+    <label>Passwort <input name="ntfy_password" type="password" value="{{ settings.ntfy_password }}" autocomplete="off"></label>
+  </div>
+  <div class="actions">
+    <button type="submit" name="action" value="ntfy">Speichern</button>
+    <button type="submit" name="action" value="ntfy_test" class="btn-secondary" formnovalidate>Testnachricht senden</button>
+  </div>
+  <p class="muted small">„Testnachricht“ nutzt die zuletzt gespeicherten Werte.</p>
+</form>
+
+<form method="post" class="card form">
+  <h2>Passwort ändern</h2>
+  <label>Aktuelles Passwort <input name="current" type="password" autocomplete="current-password" required></label>
+  <label>Neues Passwort <input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
+  <div class="actions"><button type="submit" name="action" value="password">Ändern</button></div>
+</form>
+{% endblock %}
