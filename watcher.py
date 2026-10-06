@@ -6,6 +6,7 @@ import time
 import db
 import notify
 from sources import SOURCES, http_session
+from sources.url import split_urls
 
 log = logging.getLogger("gear-watcher")
 
@@ -59,17 +60,23 @@ def run_watch(watch, session=None) -> dict:
     user_settings = db.get_user_settings(watch["user_id"])
     states = db.get_site_states(watch["id"])
     started = db.now()
-    summary = {"new": 0, "price_drop": 0, "errors": 0}
+    summary = {"new": 0, "price_drop": 0, "back_in_stock": 0, "errors": 0}
     events: list[tuple[str, object, dict | None]] = []
+    watch["_settings"] = user_settings  # z.B. für API-Zugangsdaten (eBay)
 
-    for site in [s for s in (watch["sites"] or "").split(",") if s]:
-        src = SOURCES.get(site)
-        if not src:
-            continue
+    for site in active_sites(watch):
+        src = SOURCES[site]
         baseline = site not in states
+        missing = [k for k in src.get("needs", ()) if not user_settings.get(k)]
+        if missing:
+            db.save_site_state(watch["id"], site, None, "Zugangsdaten fehlen (Einstellungen)")
+            continue
+        watch["_warnings"] = []
         try:
             raw = src["search"](watch, session)
             items = apply_filters(watch, raw, src["filters"])
+            for w in watch["_warnings"]:
+                db.log("WARNING", f"{src['label']}: {w}", watch["user_id"], watch["id"])
         except Exception as e:  # eine kaputte Quelle darf die anderen nicht blockieren
             summary["errors"] += 1
             db.save_site_state(watch["id"], site, None, str(e))
@@ -80,7 +87,7 @@ def run_watch(watch, session=None) -> dict:
 
         for item in items:
             event, old = db.upsert_listing(watch["id"], item, baseline)
-            if event == "price_drop" and not watch["notify_price_drop"]:
+            if event in ("price_drop", "back_in_stock") and not watch["notify_price_drop"]:
                 continue
             if event != "unchanged":
                 summary[event] += 1
@@ -92,9 +99,21 @@ def run_watch(watch, session=None) -> dict:
 
     db.mark_watch_run(watch["id"], started)
     _notify(watch, user_settings, events)
-    if summary["new"] or summary["price_drop"]:
-        db.log("INFO", f"{summary['new']} neu, {summary['price_drop']} günstiger", watch["user_id"], watch["id"])
+    if summary["new"] or summary["price_drop"] or summary["back_in_stock"]:
+        db.log("INFO", f"{summary['new']} neu, {summary['price_drop']} günstiger, "
+               f"{summary['back_in_stock']} wieder lieferbar", watch["user_id"], watch["id"])
     return summary
+
+
+def active_sites(watch: dict) -> list[str]:
+    """Angehakte Quellen + automatisch die URL-Beobachtung, wenn URLs eingetragen sind."""
+    watch = dict(watch)  # sqlite3.Row aus Templates hat kein .get()
+    sites = [s for s in (watch.get("sites") or "").split(",") if s in SOURCES and not SOURCES[s].get("hidden")]
+    if not (watch.get("query") or "").strip():
+        sites = []  # ohne Suchbegriff nur URL-Beobachtung
+    if split_urls(watch.get("urls")):
+        sites.append("url")
+    return sites
 
 
 def _notify(watch: dict, settings: dict, events: list):
@@ -105,7 +124,8 @@ def _notify(watch: dict, settings: dict, events: list):
         return
 
     if len(events) > MAX_SINGLE_NOTIFICATIONS:
-        lines = [f"• {_fmt_price(i.price)} – {i.title} ({SOURCES[i.site]['label']})" for _, i, _ in events[:15]]
+        lines = [f"• {_fmt_price(i.price)} – {i.title} ({i.location if i.site == 'url' else SOURCES[i.site]['label']})"
+                 for _, i, _ in events[:15]]
         if len(events) > 15:
             lines.append(f"… und {len(events) - 15} weitere")
         ok, err = notify.send(settings, f"{watch['name']}: {len(events)} Treffer", "\n".join(lines))
@@ -115,8 +135,12 @@ def _notify(watch: dict, settings: dict, events: list):
             label = SOURCES[item.site]["label"]
             if event == "price_drop":
                 title = f"↓ {_fmt_price(item.price)} – {item.title}"
-                msg = f"Vorher {_fmt_price(old['price'])} · {label} · Suche „{watch['name']}“"
+                msg = f"Vorher {_fmt_price(old['price'])} · {item.location or label} · Suche „{watch['name']}“"
                 tags = "chart_with_downwards_trend"
+            elif event == "back_in_stock":
+                title = f"Wieder lieferbar: {item.title}"
+                msg = f"{_fmt_price(item.price)} · {item.location or label} · Suche „{watch['name']}“"
+                tags = "package"
             else:
                 title = f"{_fmt_price(item.price)} – {item.title}"
                 bits = [label, item.location, item.condition, "Auktion" if item.is_auction else ""]

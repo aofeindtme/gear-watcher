@@ -11,6 +11,7 @@ import db
 import notify
 import watcher
 from sources import SOURCES
+from sources.url import split_urls
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -55,7 +56,10 @@ def current_user():
 
 @app.context_processor
 def inject_globals():
-    return {"user": current_user(), "SOURCES": SOURCES, "fmt_price": watcher._fmt_price}
+    user = current_user()
+    configured = [k for k, v in db.get_user_settings(user["id"]).items() if v] if user else []
+    return {"user": user, "SOURCES": SOURCES, "fmt_price": watcher._fmt_price,
+            "active_sites": watcher.active_sites, "configured": configured}
 
 
 LOCAL_TZ = ZoneInfo(os.environ.get("TZ") or "Europe/Berlin")
@@ -143,7 +147,9 @@ def _float_or_none(v):
 
 def _watch_from_form(form) -> tuple[dict, list[str]]:
     errors = []
-    sites = [s for s in form.getlist("sites") if s in SOURCES]
+    sites = [s for s in form.getlist("sites") if s in SOURCES and not SOURCES[s].get("hidden")]
+    raw_urls = [u.strip() for u in form.get("urls", "").splitlines() if u.strip()]
+    urls = split_urls(form.get("urls"))
     values = {
         "name": form.get("name", "").strip(),
         "query": form.get("query", "").strip(),
@@ -155,6 +161,7 @@ def _watch_from_form(form) -> tuple[dict, list[str]]:
         "search_description": int(bool(form.get("search_description"))),
         "notify_price_drop": int(bool(form.get("notify_price_drop"))),
         "active": int(bool(form.get("active"))),
+        "urls": "\n".join(urls),
     }
     try:
         values["min_price"] = _float_or_none(form.get("min_price"))
@@ -165,12 +172,14 @@ def _watch_from_form(form) -> tuple[dict, list[str]]:
         values["interval_min"] = max(watcher.MIN_INTERVAL_MIN, int(form.get("interval_min") or 60))
     except ValueError:
         errors.append("Intervall bitte als ganze Zahl (Minuten) angeben.")
-    if not values["query"]:
-        errors.append("Suchbegriff fehlt.")
-    if not values["name"]:
-        values["name"] = values["query"]
-    if not sites:
+    if len(raw_urls) != len(urls):
+        errors.append("URLs bitte vollständig mit https:// angeben, eine pro Zeile.")
+    if not values["query"] and not urls:
+        errors.append("Suchbegriff oder mindestens eine URL angeben.")
+    if values["query"] and not sites and not urls:
         errors.append("Mindestens eine Quelle auswählen.")
+    if not values["name"]:
+        values["name"] = values["query"] or (urls[0].split("/")[2].removeprefix("www.") if urls else "")
     if values["zip_code"] and not values["zip_code"].isdigit():
         errors.append("PLZ bitte nur als Ziffern.")
     if values["zip_code"] and not values["radius_km"]:
@@ -247,9 +256,11 @@ def settings_page():
     user = current_user()
     if request.method == "POST":
         action = request.form.get("action")
-        if action == "ntfy":
-            db.save_user_settings(user["id"], {k: request.form.get(k, "").strip() for k in db.USER_SETTING_DEFAULTS})
-            flash("ntfy-Einstellungen gespeichert.")
+        if action in ("ntfy", "ebay"):
+            # nur die Felder des abgeschickten Formulars - sonst leert "ntfy speichern" die eBay-Daten
+            db.save_user_settings(user["id"], {k: request.form.get(k, "").strip()
+                                               for k in db.USER_SETTING_DEFAULTS if k in request.form})
+            flash("Einstellungen gespeichert.")
         elif action == "ntfy_test":
             ok, err = notify.send(db.get_user_settings(user["id"]), "Gear Watcher",
                                   "Testnachricht - ntfy funktioniert.", tags="white_check_mark")

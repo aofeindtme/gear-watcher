@@ -77,3 +77,24 @@ def test_broken_source_does_not_block_others(env):
     assert s["errors"] == 1
     assert db.get_site_states(wid)["fake"]["last_count"] == 1
     assert "kaputt" in db.get_site_states(wid)["broken"]["last_error"]
+
+
+def test_back_in_stock(env):
+    db, watcher, uid, wid, results, sent = env
+    def shop(avail, price=100):
+        return Listing(site="fake", ext_id="p", title="Jacke", url="u", price=price, available=avail)
+    results["items"] = [shop(False)]
+    watcher.run_watch(db.get_watch(wid))
+    results["items"] = [shop(None)]            # unbekannt überschreibt den Status nicht
+    watcher.run_watch(db.get_watch(wid))
+    results["items"] = [shop(True)]
+    s = watcher.run_watch(db.get_watch(wid))
+    assert s["back_in_stock"] == 1 and sent == ["Wieder lieferbar: Jacke"]
+
+
+def test_missing_credentials_skip_source(env):
+    db, watcher, uid, wid, results, sent = env
+    watcher.SOURCES["fake"]["needs"] = ("ebay_client_id",)
+    s = watcher.run_watch(db.get_watch(wid))
+    assert s["errors"] == 0
+    assert "Zugangsdaten" in db.get_site_states(wid)["fake"]["last_error"]

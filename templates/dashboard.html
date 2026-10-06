@@ -42,10 +42,11 @@
     </a>
     <div class="body">
       <div class="meta">
-        <span class="site site-{{ l.site }}">{{ SOURCES[l.site].label if l.site in SOURCES else l.site }}</span>
+        <span class="site site-{{ l.site }}">{{ l.location if l.site == 'url' else (SOURCES[l.site].label if l.site in SOURCES else l.site) }}</span>
         {% if l.status == 'new' %}<span class="badge new">neu</span>{% endif %}
         {% if l.status == 'star' %}<span class="badge star">★</span>{% endif %}
         {% if l.is_auction %}<span class="badge">Auktion</span>{% endif %}
+        {% if l.available == 0 %}<span class="badge soldout">nicht lieferbar</span>{% endif %}
         <span class="muted">{{ l.watch_name }}</span>
       </div>
       <a href="{{ l.url }}" target="_blank" rel="noopener noreferrer" class="title">{{ l.title }}</a>
@@ -56,8 +57,8 @@
         {% endif %}
       </div>
       <div class="muted small">
-        {{ [l.location, l.condition, l.posted] | select | join(' · ') }}
-        · gefunden {{ l.first_seen | localtime }}
+        {{ [l.location if l.site != 'url' else '', l.condition, l.posted,
+            'gefunden ' ~ (l.first_seen | localtime)] | select | join(' · ') }}
       </div>
       <div class="actions">
         {% for st, label in [('star', '★ Merken'), ('seen', 'Gesehen'), ('hidden', 'Ausblenden')] if st != l.status %}

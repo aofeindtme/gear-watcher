@@ -31,7 +31,12 @@ class Listing:
     posted: str = ""     # Freitext wie die Seite ihn anzeigt ("Heute, 08:31")
     condition: str = ""  # Freitext ("Gebrauchsspuren", "neu", ...)
     is_auction: bool = False
+    available: bool | None = None  # nur Shops: lieferbar? None = unbekannt
     extra: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        # Weiche Trennstriche (&shy;) würden Ausschlusswörter/Titelfilter aushebeln
+        self.title = " ".join(self.title.replace("\xad", "").split())
 
 
 class SourceError(Exception):
@@ -47,12 +52,12 @@ def http_session() -> requests.Session:
     return s
 
 
-def get(session: requests.Session, url: str, **kwargs) -> requests.Response:
+def get(session: requests.Session, url: str, ok_status: tuple = (200,), **kwargs) -> requests.Response:
     try:
         r = session.get(url, timeout=TIMEOUT, **kwargs)
     except requests.RequestException as e:
         raise SourceError(f"{url}: {e}") from e
-    if r.status_code != 200:
+    if r.status_code not in ok_status:
         raise SourceError(f"{url}: HTTP {r.status_code}")
     # Ohne charset im Content-Type rät requests ISO-8859-1 -> "â‚¬" statt "€"
     if "charset" not in r.headers.get("Content-Type", "").lower():
@@ -60,32 +65,70 @@ def get(session: requests.Session, url: str, **kwargs) -> requests.Response:
     return r
 
 
-_PRICE_RE = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?\s*€")
+_PRICE_RE = re.compile(r"€\s*(\d[\d.,]*(?:-)?)|(\d[\d.,]*(?:-)?)\s*(?:€|EUR\b)")
+
+
+def _to_number(raw: str) -> float | None:
+    """Deutsches ("1.250,00", "29,-") und englisches ("1,250.00") Format."""
+    raw = raw.rstrip("-").rstrip(",.")
+    if not raw:
+        return None
+    if "," in raw and "." in raw:
+        dec = "," if raw.rfind(",") > raw.rfind(".") else "."
+    elif "," in raw:
+        dec = "," if len(raw) - raw.rfind(",") - 1 in (1, 2) else None
+    elif "." in raw:
+        dec = "." if len(raw) - raw.rfind(".") - 1 in (1, 2) else None
+    else:
+        dec = None
+    if dec:
+        whole, frac = raw.rsplit(dec, 1)
+        whole = whole.replace(".", "").replace(",", "")
+        return float(f"{whole or 0}.{frac}")
+    return float(raw.replace(".", "").replace(",", ""))
 
 
 def parse_price(text: str) -> float | None:
-    """'1.250 € VB' -> 1250.0, '35,72 €' -> 35.72, 'Zu verschenken' -> 0.0,
-    'VB' ohne Zahl -> None."""
+    """'1.250 € VB' -> 1250.0, '35,72 €' -> 35.72, '29,- €' -> 29.0, '€129.00' -> 129.0,
+    'Zu verschenken' -> 0.0, 'VB' ohne Zahl -> None."""
     if not text:
         return None
     m = _PRICE_RE.search(text)
     if m:
-        euros = int(m.group(1).replace(".", ""))
-        cents = int((m.group(2) or "0").ljust(2, "0"))
-        return euros + cents / 100
+        return _to_number(m.group(1) or m.group(2))
     if "verschenken" in text.lower():
         return 0.0
     return None
 
 
+def to_float(value) -> float | None:
+    """Maschinenlesbare Preise ('37.95', '1099.0') aus Attributen/Microdata."""
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
 # Registry: Schlüssel = wie in der DB gespeichert, Reihenfolge = Anzeige im UI.
-# "kind": classifieds -> Benachrichtigung bei neuen Anzeigen;
-#         shop        -> zusätzlich bei Preissenkung.
-from . import egun, kleinanzeigen  # noqa: E402
+# kind:    classifieds = Kleinanzeigen/Auktionen, shop = Neuware
+# filters: was die Seite selbst filtert (Rest filtert watcher.apply_filters)
+# needs:   Einstellungen, ohne die die Quelle nicht nutzbar ist
+from . import ebay, egun, frankonia, frankonia_kleinanzeigen, kleinanzeigen, shopware, url  # noqa: E402
 
 SOURCES = {
     "egun": {"label": "eGun", "kind": "classifieds", "search": egun.search,
              "filters": {"price", "zip", "condition"}},
     "kleinanzeigen": {"label": "Kleinanzeigen", "kind": "classifieds", "search": kleinanzeigen.search,
                       "filters": {"price", "zip"}},
+    "frankonia_kleinanzeigen": {"label": "Frankonia-Kleinanzeigen", "kind": "classifieds",
+                                "search": frankonia_kleinanzeigen.search, "filters": {"price", "zip"}},
+    "ebay": {"label": "eBay", "kind": "classifieds", "search": ebay.search,
+             "filters": {"price", "condition"}, "needs": ("ebay_client_id", "ebay_client_secret")},
+    "frankonia": {"label": "Frankonia", "kind": "shop", "search": frankonia.search, "filters": set()},
+    "pirschergear": {"label": "Pirscher Gear", "kind": "shop", "search": shopware.search_pirschergear,
+                     "filters": set()},
+    "triebel": {"label": "Sportwaffen Triebel", "kind": "shop", "search": shopware.search_triebel,
+                "filters": set()},
+    # Kein Häkchen im Formular: läuft automatisch, sobald eine Suche URLs enthält.
+    "url": {"label": "Shop-URL", "kind": "shop", "search": url.search, "filters": set(), "hidden": True},
 }

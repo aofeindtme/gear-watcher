@@ -5,16 +5,35 @@
 <h1>{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }}</h1>
 {% for e in errors %}<div class="error">{{ e }}</div>{% endfor %}
 <form method="post" class="card form">
-  <label>Suchbegriff <input name="query" value="{{ w.query or '' }}" required placeholder="z. B. Leica Amplus 6"></label>
+  <label>Suchbegriff <input name="query" value="{{ w.query or '' }}" placeholder="z. B. Leica Amplus 6"></label>
   <label>Name (optional) <input name="name" value="{{ w.name or '' }}" placeholder="wie der Suchbegriff"></label>
 
   <fieldset>
-    <legend>Quellen</legend>
-    {% set chosen = (w.sites or ','.join(SOURCES.keys())).split(',') %}
-    {% for key, src in SOURCES.items() %}
-    <label class="check"><input type="checkbox" name="sites" value="{{ key }}" {{ 'checked' if key in chosen }}> {{ src.label }}
-      <span class="muted small">({{ 'Kleinanzeigen/Auktionen' if src.kind == 'classifieds' else 'Shop' }})</span></label>
+    <legend>Quellen für den Suchbegriff</legend>
+    {% set chosen = (w.sites if w.sites is defined and w.sites is not none else 'egun,kleinanzeigen,frankonia_kleinanzeigen').split(',') %}
+    {% for kind, heading in [('classifieds', 'Kleinanzeigen & Auktionen – meldet neue Angebote'), ('shop', 'Shops (Neuware) – meldet neue Produkte, Preissenkungen, wieder lieferbar')] %}
+      <p class="small"><strong>{{ heading }}</strong></p>
+      {% for key, src in SOURCES.items() if src.kind == kind and not src.hidden %}
+      {% set missing = src.needs | default([]) | reject('in', configured) | list %}
+      <label class="check"><input type="checkbox" name="sites" value="{{ key }}" {{ 'checked' if key in chosen }}> {{ src.label }}
+        {% if missing %}<span class="muted small">– erst unter <a href="{{ url_for('settings_page') }}">Einstellungen</a> API-Zugang eintragen</span>{% endif %}
+      </label>
+      {% endfor %}
     {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Bestimmte Seiten beobachten (optional)</legend>
+    <label>URLs, eine pro Zeile
+      <textarea name="urls" rows="4" placeholder="https://www.recon-company.com/sale&#10;https://www.alljagd.de/optik&#10;https://www.frankonia.de/p/…">{{ w.urls or '' }}</textarea>
+    </label>
+    <p class="muted small">
+      <strong>Produktseite</strong>: meldet Preissenkungen und „wieder lieferbar“.
+      <strong>Kategorieseite</strong> (Shopware-Shops wie Recon, Alljagd, Pirscher Gear, Triebel; Frankonia):
+      meldet neue Produkte – ein Suchbegriff wirkt dort als Titelfilter (alle Wörter müssen vorkommen).
+      Für Recon und Alljagd der einzige Weg, deren Suche ist per robots.txt gesperrt.
+      Seiten, deren robots.txt den Abruf verbietet, werden übersprungen.
+    </p>
   </fieldset>
 
   <fieldset>
@@ -35,7 +54,7 @@
         {% endfor %}
       </select>
     </label>
-    <p class="muted small">Zustand filtert derzeit nur eGun direkt.</p>
+    <p class="muted small">Zustand filtern eGun und eBay direkt.</p>
     <label>Ausschlusswörter (kommagetrennt) <input name="exclude_words" value="{{ w.exclude_words or '' }}" placeholder="z. B. suche, defekt, nerf, airsoft"></label>
     <label class="check"><input type="checkbox" name="search_description" {{ 'checked' if w.search_description }}> Auch in Beschreibungen suchen (eGun)</label>
   </fieldset>
@@ -44,7 +63,7 @@
     <legend>Benachrichtigung</legend>
     <label>Abrufen alle … Minuten <input name="interval_min" inputmode="numeric" value="{{ w.interval_min or 60 }}"></label>
     <p class="muted small">Minimum 15 Minuten.</p>
-    <label class="check"><input type="checkbox" name="notify_price_drop" {{ 'checked' if w.notify_price_drop is not defined or w.notify_price_drop is none or w.notify_price_drop }}> Auch bei Preissenkung bekannter Angebote benachrichtigen</label>
+    <label class="check"><input type="checkbox" name="notify_price_drop" {{ 'checked' if w.notify_price_drop is not defined or w.notify_price_drop is none or w.notify_price_drop }}> Auch bei Preissenkung und „wieder lieferbar“ benachrichtigen</label>
     <label class="check"><input type="checkbox" name="active" {{ 'checked' if w.active is not defined or w.active is none or w.active }}> Aktiv</label>
   </fieldset>
 

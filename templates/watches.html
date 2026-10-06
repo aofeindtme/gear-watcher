@@ -13,16 +13,17 @@
     <a href="{{ url_for('dashboard', watch=w.id) }}">{{ w.total_count }} Treffer{% if w.new_count %}, <strong>{{ w.new_count }} neu</strong>{% endif %}</a>
   </div>
   <div class="muted">
-    „{{ w.query }}“
+    {% if w.query %}„{{ w.query }}“{% else %}nur URLs{% endif %}
     {% if w.min_price is not none or w.max_price is not none %} · {{ fmt_price(w.min_price) if w.min_price is not none else '0 €' }} – {{ fmt_price(w.max_price) if w.max_price is not none else '∞' }}{% endif %}
     {% if w.zip_code %} · {{ w.zip_code }} +{{ w.radius_km }} km{% endif %}
     {% if w.condition %} · {{ {'new': 'neu', 'used': 'gebraucht'}[w.condition] }}{% endif %}
     {% if w.exclude_words %} · ohne: {{ w.exclude_words }}{% endif %}
+    {% if w.urls %} · {{ w.urls.splitlines() | length }} URL(s){% endif %}
     · alle {{ w.interval_min }} min
     {% if w.cheapest_now is not none %} · aktuell ab <strong>{{ fmt_price(w.cheapest_now) }}</strong>{% endif %}
   </div>
   <ul class="sites">
-    {% for site in w.sites.split(',') if site %}
+    {% for site in active_sites(w) %}
       {% set st = states[w.id].get(site) %}
       <li>
         <strong>{{ SOURCES[site].label if site in SOURCES else site }}</strong>:

@@ -13,23 +13,42 @@ per [ntfy](https://ntfy.sh) aufs Handy. Ziel: Dinge möglichst günstig bekommen
 - **Erster Abruf** einer Suche (und nach jeder Änderung ihrer Filter) übernimmt alle
   vorhandenen Treffer still als "gesehen" - Push-Nachrichten gibt es danach nur für
   wirklich Neues. Mehr als 5 neue Treffer auf einmal kommen als eine Sammelnachricht.
-- **Preissenkung** eines bekannten Angebots (nicht bei Auktionsgeboten) löst ebenfalls
-  eine Nachricht aus; Tiefstpreis und Preisverlauf werden gespeichert.
+- **Preissenkung** eines bekannten Angebots (nicht bei Auktionsgeboten) und **wieder
+  lieferbar** (Shops) lösen ebenfalls eine Nachricht aus; Tiefstpreis und Preisverlauf
+  werden gespeichert.
 - Unter **Treffer** alle Funde als Karten, filterbar nach Suche/Status/Quelle, mit
   Merken/Gesehen/Ausblenden.
 
 ## Quellen
 
-| Quelle | Art | Filter direkt auf der Seite |
-|---|---|---|
-| eGun | Auktionen/Sofortkauf | Preis, PLZ/Umkreis, Zustand, Beschreibung |
-| Kleinanzeigen | Kleinanzeigen | Preis, PLZ/Umkreis |
+| Quelle | Art | Filter direkt auf der Seite | Hinweis |
+|---|---|---|---|
+| eGun | Auktionen/Sofortkauf | Preis, PLZ/Umkreis, Zustand, Beschreibung | |
+| Kleinanzeigen | Kleinanzeigen | Preis, PLZ/Umkreis | |
+| Frankonia-Kleinanzeigen | Kleinanzeigen/Auktionen | Preis, PLZ/Umkreis | |
+| eBay | Auktionen/Sofortkauf | Preis, Zustand | offizielle Browse-API, Zugangsdaten unter Einstellungen |
+| Frankonia | Shop | – | |
+| Pirscher Gear | Shop (Shopware 6) | – | pirschergear**.com** (die .de ist geparkt) |
+| Sportwaffen Triebel | Shop (Shopware 5) | – | |
+| **Shop-URLs** | Produkt- oder Kategorieseiten | – | siehe unten |
 
 Ausschlusswörter und Preisgrenzen werden zusätzlich generisch nachgefiltert.
 
-Geplant (je ein Adapter in `sources/`): eBay (offizielle Browse-API), Frankonia-Kleinanzeigen,
-Frankonia, Brownells, Recon Company, Pirscher Gear, Sportwaffen Triebel, Alljagd,
-Waffen Schumacher. Amazon nur über Keepa (kostenpflichtige API) - Amazon blockt Scraper.
+**Shop-URLs beobachten:** In einer Suche können zusätzlich (oder ausschließlich) URLs
+eingetragen werden:
+- **Produktseite** (beliebiger Shop mit schema.org-Daten, also fast alle): meldet
+  Preissenkungen und "wieder lieferbar".
+- **Kategorieseite** (Shopware-5/6-Shops, Frankonia): meldet neue Produkte; ein
+  Suchbegriff wirkt dort als Titelfilter.
+- Vor jedem Abruf wird die `robots.txt` geprüft. Für **Recon Company** und **Alljagd** ist
+  das der einzige Weg - beide sperren ihre Suche per robots.txt.
+
+**Bewusst nicht dabei:**
+- **Brownells** - brownells.de ist eine geparkte Domain, der echte Shop
+  (brownells-deutschland.de) steht hinter einer Cloudflare-Bot-Sperre. Die wird nicht umgangen.
+- **Amazon** - blockt Scraper, die offizielle API setzt ein Partnerkonto mit Umsätzen
+  voraus. Option für später: Keepa-API (kostenpflichtig).
+- **Waffen Schumacher** - waffenschumacher.com hat keinen Online-Shop (WordPress-Seite).
 
 Neue Quelle hinzufügen: Modul in `sources/` mit `search(watch, session) -> list[Listing]`
 anlegen und in `sources/__init__.py` in `SOURCES` eintragen. Vorher `robots.txt` der Seite

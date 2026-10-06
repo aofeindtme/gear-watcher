@@ -18,12 +18,20 @@ USER_SETTING_DEFAULTS = {
     "ntfy_token": "",
     "ntfy_user": "",
     "ntfy_password": "",
+    "ebay_client_id": "",
+    "ebay_client_secret": "",
 }
 
 WATCH_FIELDS = [
     "name", "query", "sites", "min_price", "max_price", "zip_code", "radius_km",
     "condition", "exclude_words", "search_description", "interval_min",
-    "notify_price_drop", "active",
+    "notify_price_drop", "active", "urls",
+]
+
+# Spalten, die nach der ersten Version dazukamen: (Tabelle, Spalte, Definition)
+MIGRATIONS = [
+    ("watches", "urls", "TEXT"),
+    ("listings", "available", "INTEGER"),
 ]
 
 
@@ -128,6 +136,10 @@ def init_db():
             message TEXT NOT NULL
         );
         """)
+        for table, column, definition in MIGRATIONS:
+            existing = {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
+            if column not in existing:
+                c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
         if not c.execute("SELECT 1 FROM app_settings WHERE key='secret_key'").fetchone():
             c.execute("INSERT INTO app_settings VALUES ('secret_key', ?)", (secrets.token_hex(32),))
 
@@ -199,7 +211,8 @@ def list_watches(user_id: int):
                    (SELECT COUNT(*) FROM listings l WHERE l.watch_id=w.id AND l.status='new') AS new_count,
                    (SELECT COUNT(*) FROM listings l WHERE l.watch_id=w.id AND l.status!='hidden') AS total_count,
                    (SELECT MIN(l.price) FROM listings l WHERE l.watch_id=w.id AND l.status!='hidden'
-                        AND l.price > 0 AND l.last_seen >= w.last_run_at) AS cheapest_now
+                        AND l.price > 0 AND l.is_auction = 0
+                        AND l.last_seen >= w.last_run_at) AS cheapest_now
             FROM watches w WHERE w.user_id=? ORDER BY w.name COLLATE NOCASE
         """, (user_id,)).fetchall()
 
@@ -286,7 +299,8 @@ def save_site_state(watch_id: int, site: str, count: int | None, error: str | No
 
 def upsert_listing(watch_id: int, listing, baseline: bool) -> tuple[str, dict | None]:
     """Speichert einen Treffer. Rückgabe: (ereignis, alte_zeile)
-    ereignis = 'new' | 'price_drop' | 'unchanged'."""
+    ereignis = 'new' | 'price_drop' | 'back_in_stock' | 'unchanged'."""
+    available = None if listing.available is None else int(listing.available)
     ts = now()
     with conn() as c:
         old = c.execute(
@@ -296,11 +310,11 @@ def upsert_listing(watch_id: int, listing, baseline: bool) -> tuple[str, dict | 
         if old is None:
             cur = c.execute("""
                 INSERT INTO listings (watch_id, site, ext_id, title, url, image, price, price_text,
-                    lowest_price, location, posted, condition, is_auction, status, first_seen, last_seen)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    lowest_price, location, posted, condition, is_auction, available, status, first_seen, last_seen)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (watch_id, listing.site, listing.ext_id, listing.title, listing.url, listing.image,
                   listing.price, listing.price_text, listing.price, listing.location, listing.posted,
-                  listing.condition, int(listing.is_auction), "seen" if baseline else "new", ts, ts))
+                  listing.condition, int(listing.is_auction), available, "seen" if baseline else "new", ts, ts))
             c.execute("INSERT INTO price_history VALUES (?,?,?)", (cur.lastrowid, ts, listing.price))
             return ("unchanged" if baseline else "new"), None
 
@@ -312,16 +326,18 @@ def upsert_listing(watch_id: int, listing, baseline: bool) -> tuple[str, dict | 
             # Preissenkungen (Sofortkauf/Festpreis) zählen.
             if listing.price < old["price"] and not listing.is_auction:
                 event = "price_drop"
+        if available == 1 and old["available"] == 0:
+            event = "back_in_stock"
         if listing.price is not None and (lowest is None or listing.price < lowest):
             lowest = listing.price
         c.execute("""
             UPDATE listings SET title=?, url=?, image=?, price=?, price_text=?, lowest_price=?,
-                location=?, posted=?, condition=?, is_auction=?, last_seen=?
+                location=?, posted=?, condition=?, is_auction=?, available=?, last_seen=?
             WHERE id=?
         """, (listing.title, listing.url, listing.image, listing.price, listing.price_text, lowest,
               listing.location or old["location"], listing.posted or old["posted"], listing.condition,
-              int(listing.is_auction), ts, old["id"]))
-        if event == "price_drop" and old["status"] == "seen":
+              int(listing.is_auction), available if available is not None else old["available"], ts, old["id"]))
+        if event in ("price_drop", "back_in_stock") and old["status"] == "seen":
             c.execute("UPDATE listings SET status='new' WHERE id=?", (old["id"],))
         return event, dict(old)
 

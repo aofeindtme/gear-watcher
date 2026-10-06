@@ -20,6 +20,19 @@
 </form>
 
 <form method="post" class="card form">
+  <h2>eBay (optional)</h2>
+  <p class="muted small">
+    eBay erlaubt automatische Abfragen nur über die offizielle API. Kostenlos: auf
+    <a href="https://developer.ebay.com" target="_blank" rel="noopener">developer.ebay.com</a> registrieren,
+    unter „Application Keys“ ein <strong>Production</strong>-Keyset erzeugen und hier App ID (Client ID)
+    und Cert ID (Client Secret) eintragen.
+  </p>
+  <label>Client ID (App ID) <input name="ebay_client_id" value="{{ settings.ebay_client_id }}" autocomplete="off"></label>
+  <label>Client Secret (Cert ID) <input name="ebay_client_secret" type="password" value="{{ settings.ebay_client_secret }}" autocomplete="off"></label>
+  <div class="actions"><button type="submit" name="action" value="ebay">Speichern</button></div>
+</form>
+
+<form method="post" class="card form">
   <h2>Passwort ändern</h2>
   <label>Aktuelles Passwort <input name="current" type="password" autocomplete="current-password" required></label>
   <label>Neues Passwort <input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
