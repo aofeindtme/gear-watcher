@@ -98,3 +98,28 @@ def test_missing_credentials_skip_source(env):
     s = watcher.run_watch(db.get_watch(wid))
     assert s["errors"] == 0
     assert "Zugangsdaten" in db.get_site_states(wid)["fake"]["last_error"]
+
+
+def test_prune_after_filter_change(env):
+    db, watcher, uid, wid, results, sent = env
+    results["items"] = [Listing(site="fake", ext_id="1", title="Leica Amplus 6", url="u1", price=900),
+                        Listing(site="fake", ext_id="2", title="Leica Fernglas", url="u2", price=500),
+                        Listing(site="fake", ext_id="3", title="Zeiss Victory", url="u3", price=2000)]
+    watcher.run_watch(db.get_watch(wid))
+    star = next(l for l in db.list_listings(uid) if l["ext_id"] == "3")
+    db.set_listing_status(star["id"], uid, "star")
+    db.save_watch(uid, {"query": "amplus leica", "require_all_words": 1, "max_price": 1000}, wid)
+    assert watcher.prune_listings(db.get_watch(wid)) == 1          # Fernglas raus, Zeiss gemerkt
+    assert sorted(l["ext_id"] for l in db.list_listings(uid)) == ["1", "3"]
+
+
+def test_sorting(env):
+    db, watcher, uid, wid, results, sent = env
+    results["items"] = [item(1, 300), item(2, None), item(3, 100)]
+    watcher.run_watch(db.get_watch(wid))
+    assert [l["ext_id"] for l in db.list_listings(uid, sort="price_asc")] == ["3", "1", "2"]
+    assert [l["ext_id"] for l in db.list_listings(uid, sort="price_desc")] == ["1", "3", "2"]
+    results["items"] = [item(1, 150), item(2, None), item(3, 90)]
+    watcher.run_watch(db.get_watch(wid))
+    assert [l["ext_id"] for l in db.list_listings(uid, sort="drop")][:2] == ["1", "3"]
+    assert db.list_listings(uid, sort="nonsense")  # unbekannt -> Standard, kein SQL-Fehler

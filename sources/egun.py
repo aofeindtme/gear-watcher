@@ -60,6 +60,8 @@ def parse(html: str) -> list[Listing]:
         title = li.select_one(".list-item__title-text")
         if not link or not title:
             continue
+        for badge in title.select(".badge"):  # "neu"-Badge steckt im Titel-Element
+            badge.decompose()
         price_el = li.select_one(".list-item__price")
         price_text = price_el.get_text(" ", strip=True) if price_el else ""
         label_el = li.select_one(".list-item__price-label")

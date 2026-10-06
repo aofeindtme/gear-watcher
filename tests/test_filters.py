@@ -96,3 +96,15 @@ def test_require_all_words_any_order():
     assert [i.title for i in apply_filters(w, items, set())] == ["Leica Amplus 6 2,5-15x56", "Amplus Leica Zielfernrohr"]
     w["require_all_words"] = 0
     assert len(apply_filters(w, items, set())) == 4
+
+
+def test_all_words_not_applied_to_explicit_urls():
+    item = Listing(site="url", ext_id="u", title="Helikon Wallet", url="u", price=10)
+    assert apply_filters({"query": "swarovski z8", "require_all_words": 1}, [item], set()) == [item]
+
+
+def test_egun_title_without_new_badge():
+    html = """<li data-auction-id="7"><a class="list-item__link" href="/item/7/x">
+      <span class="list-item__title-text"><span class="badge badge--new">neu</span> Zielfernrohr Z8i</span>
+      <span class="list-item__price">100,00 €</span></a></li>"""
+    assert egun.parse(html)[0].title == "Zielfernrohr Z8i"

@@ -343,10 +343,26 @@ def upsert_listing(watch_id: int, listing, baseline: bool) -> tuple[str, dict | 
         return event, dict(old)
 
 
+# Sortierungen der Trefferseite: Schlüssel -> (Label, ORDER BY). Preise ohne Wert immer ans Ende.
+LISTING_SORTS = {
+    "newest": ("Neueste zuerst", "l.first_seen DESC, l.id DESC"),
+    # Auktionsgebote sind keine Endpreise -> nach den Festpreisen
+    "price_asc": ("Preis aufsteigend", "l.price IS NULL, l.is_auction, l.price ASC, l.first_seen DESC"),
+    "price_desc": ("Preis absteigend", "l.price IS NULL, l.is_auction, l.price DESC, l.first_seen DESC"),
+    "drop": ("Größte Preissenkung", "(l.lowest_price IS NULL OR first_price IS NULL), "
+                                    "(first_price - l.price) DESC, l.first_seen DESC"),
+    "title": ("Titel A–Z", "l.title COLLATE NOCASE ASC"),
+    "site": ("Quelle", "l.site ASC, l.first_seen DESC"),
+    "updated": ("Zuletzt gesehen", "l.last_seen DESC, l.id DESC"),
+}
+
+
 def list_listings(user_id: int, watch_id: int | None = None, status: str | None = None,
-                  site: str | None = None, limit: int = 300):
+                  site: str | None = None, limit: int = 300, sort: str = "newest"):
     sql = """
-        SELECT l.*, w.name AS watch_name FROM listings l
+        SELECT l.*, w.name AS watch_name,
+               (SELECT h.price FROM price_history h WHERE h.listing_id = l.id ORDER BY h.ts LIMIT 1) AS first_price
+        FROM listings l
         JOIN watches w ON w.id = l.watch_id
         WHERE w.user_id = ?
     """
@@ -362,10 +378,22 @@ def list_listings(user_id: int, watch_id: int | None = None, status: str | None 
     if site:
         sql += " AND l.site = ?"
         args.append(site)
-    sql += " ORDER BY l.first_seen DESC, l.id DESC LIMIT ?"
+    sql += f" ORDER BY {LISTING_SORTS.get(sort, LISTING_SORTS['newest'])[1]} LIMIT ?"
     args.append(limit)
     with conn() as c:
         return c.execute(sql, args).fetchall()
+
+
+def listings_for_watch(watch_id: int):
+    with conn() as c:
+        return c.execute("SELECT * FROM listings WHERE watch_id=?", (watch_id,)).fetchall()
+
+
+def delete_listings(ids: list[int]):
+    if not ids:
+        return
+    with conn() as c:
+        c.executemany("DELETE FROM listings WHERE id=?", [(i,) for i in ids])
 
 
 def set_listing_status(listing_id: int, user_id: int, status: str):

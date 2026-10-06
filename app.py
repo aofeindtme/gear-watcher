@@ -114,9 +114,11 @@ def dashboard():
     watch_id = request.args.get("watch", type=int)
     status = request.args.get("status", "active")
     site = request.args.get("site") or None
-    listings = db.list_listings(user["id"], watch_id, status if status != "all" else None, site)
+    sort = request.args.get("sort") if request.args.get("sort") in db.LISTING_SORTS else "newest"
+    listings = db.list_listings(user["id"], watch_id, status if status != "all" else None, site, sort=sort)
     return render_template("dashboard.html", listings=listings, watches=db.list_watches(user["id"]),
-                           f_watch=watch_id, f_status=status, f_site=site)
+                           f_watch=watch_id, f_status=status, f_site=site, f_sort=sort,
+                           sorts=db.LISTING_SORTS)
 
 
 @app.route("/listing/<int:listing_id>/status", methods=["POST"])
@@ -210,6 +212,9 @@ def watch_form(watch_id=None):
         values, errors = _watch_from_form(request.form)
         if not errors:
             new_id = db.save_watch(user["id"], values, watch_id)
+            removed = watcher.prune_listings(db.get_watch(new_id, user["id"]))
+            if removed:
+                flash(f"{removed} bisherige Treffer passen nicht mehr zu den Filtern und wurden entfernt.")
             flash("Suche gespeichert. Der erste Abruf übernimmt vorhandene Treffer still, "
                   "danach gibt es Push-Nachrichten nur für Neues.")
             watcher.wake_event.set()

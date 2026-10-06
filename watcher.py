@@ -42,7 +42,8 @@ def apply_filters(watch: dict, listings: list, site_filters: set) -> list:
         title = item.title.lower()
         if any(w in title for w in excludes):
             continue
-        if any(w not in title for w in required):
+        # Shop-URLs: bewusst eingetragen, Kategorieseiten filtert sources/url.py selbst
+        if item.site != "url" and any(w not in title for w in required):
             continue
         # Auktionen: aktuelles Gebot ist kein Endpreis -> Preisfilter nur, wenn
         # die Seite ihn selbst anwendet (dort zählt dann ihre Logik).
@@ -53,6 +54,28 @@ def apply_filters(watch: dict, listings: list, site_filters: set) -> list:
                 continue
         out.append(item)
     return out
+
+
+def prune_listings(watch) -> int:
+    """Entfernt gespeicherte Treffer, die nicht (mehr) zu den lokalen Filtern der Suche passen
+    (Suchwörter, Ausschlusswörter, Preis). Gemerkte (★) bleiben. Was die Website selbst
+    filtert (PLZ/Umkreis, Zustand), lässt sich nachträglich nicht prüfen."""
+    from sources import Listing
+    watch = dict(watch)
+    drop = []
+    for row in db.listings_for_watch(watch["id"]):
+        if row["status"] == "star":
+            continue
+        item = Listing(site=row["site"], ext_id=row["ext_id"], title=row["title"], url=row["url"],
+                       price=row["price"], is_auction=bool(row["is_auction"]))
+        src_filters = SOURCES.get(row["site"], {}).get("filters", set())
+        if not apply_filters(watch, [item], src_filters):
+            drop.append(row["id"])
+    db.delete_listings(drop)
+    if drop:
+        db.log("INFO", f"{len(drop)} gespeicherte Treffer passen nicht mehr zu den Filtern - entfernt",
+               watch["user_id"], watch["id"])
+    return len(drop)
 
 
 def _fmt_price(p) -> str:
@@ -71,6 +94,7 @@ def run_watch(watch, session=None) -> dict:
     summary = {"new": 0, "price_drop": 0, "back_in_stock": 0, "errors": 0}
     events: list[tuple[str, object, dict | None]] = []
     watch["_settings"] = user_settings  # z.B. für API-Zugangsdaten (eBay)
+    prune_listings(watch)
 
     for site in active_sites(watch):
         src = SOURCES[site]

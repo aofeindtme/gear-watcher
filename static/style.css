@@ -150,6 +150,7 @@ input[type=checkbox] { width: auto; }
 .site-kleinanzeigen { background: #2f7d32; color: #fff; }
 .badge.new { background: var(--new); color: #fff; }
 .badge.star { background: var(--star); color: #fff; }
+.listing .price .drop { color: var(--accent); font-weight: 600; font-size: 0.85rem; }
 .badge.soldout { background: var(--danger); color: #fff; }
 .site-frankonia_kleinanzeigen, .site-frankonia { background: #1f4e3d; color: #fff; }
 .site-ebay { background: #0064d2; color: #fff; }
