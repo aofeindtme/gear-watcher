@@ -39,3 +39,20 @@ def test_mail_price_alert():
     assert (item.price, item.ext_id, item.location) == (1899.0, "<abc@idealo>", "idealo Preiswecker")
     assert item.url == "https://www.idealo.de/preisvergleich/OffersOfProduct/123.html"
     assert "Wunschpreis" in item.extra["text"]
+
+
+def _mail(subject, text):
+    msg = MIMEText(text, "plain", "utf-8")
+    msg["Subject"], msg["Message-ID"] = subject, "<x@idealo>"
+    return msg.as_bytes()
+
+
+def test_mail_skips_admin_mails_and_recommendations():
+    assert mail.parse_message(_mail("Dein persönlicher Preiswecker ist aktiviert", "Garmin fenix 8")) is None
+    assert mail.parse_message(_mail("Bitte bestätige deine E-Mail-Adresse!", "x")) is None
+    item = mail.parse_message(_mail(
+        "Dein Wunschpreis ist erreicht",
+        "Garmin fenix® 8 Wunschpreis 588,05 € Aktueller Preis 579,00 €* zzgl. Versand "
+        "Ähnlich, aber nicht gleich: Empfehlungen für dich! Garmin fenix® 9 Smartwatches"))
+    assert item.price == 579.0
+    assert "fenix® 9" not in item.extra["text"] and "fenix® 8" in item.extra["text"]

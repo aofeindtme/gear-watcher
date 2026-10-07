@@ -19,6 +19,11 @@ from . import Listing, SourceError, parse_price
 DAYS_BACK = 30
 MAX_MESSAGES = 200
 LINK_HINTS = ("idealo", "geizhals", "mydealz")
+# Verwaltungsmails (Anmeldung, Bestätigung, Alarm angelegt) sind keine Treffer
+SKIP_SUBJECTS = ("bestätige", "bestätigen", "willkommen", "aktiviert", "passwort", "newsletter", "abmeldung")
+# Ab hier hängt idealo Produktempfehlungen an - die dürfen nicht auf Suchwörter passen
+TEXT_CUT_MARKERS = ("Ähnlich, aber nicht gleich", "Empfehlungen für dich", "Das könnte dich auch interessieren")
+CURRENT_PRICE_RE = re.compile(r"(?:Aktueller Preis|Jetzt nur|Neuer Preis|Preis jetzt)\s*:?\s*([\d.,]+\s*€)", re.I)
 
 
 def _header(msg, name: str) -> str:
@@ -59,15 +64,18 @@ def _body(msg) -> tuple[str, str]:
 def parse_message(raw: bytes) -> Listing | None:
     msg = email.message_from_bytes(raw)
     subject = " ".join(_header(msg, "Subject").split())
-    if not subject:
+    if not subject or any(s in subject.lower() for s in SKIP_SUBJECTS):
         return None
     text, link = _body(msg)
+    for marker in TEXT_CUT_MARKERS:
+        text = text.split(marker, 1)[0]
     try:
         posted = parsedate_to_datetime(msg.get("Date", "")).strftime("%d.%m. %H:%M")
     except (TypeError, ValueError):
         posted = ""
     sender = _header(msg, "From")
-    price = parse_price(subject) or parse_price(text[:2000])
+    current = CURRENT_PRICE_RE.search(text)
+    price = parse_price(subject) or (parse_price(current.group(1)) if current else parse_price(text[:2000]))
     return Listing(
         site="mail",
         ext_id=(msg.get("Message-ID") or f"{subject}|{msg.get('Date', '')}").strip(),
