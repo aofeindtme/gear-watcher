@@ -1,22 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }} · Gear Watcher<script>
-  // Themenwahl belegt die Quellen vor (nur bei Änderung, nicht beim Laden)
-  var topicSel = document.querySelector("select[name=topic]");
-  topicSel && topicSel.addEventListener("change", function () {
-    if (!topicSel.value) return;
-    document.querySelectorAll("input[name=sites]").forEach(function (cb) {
-      cb.checked = cb.dataset.topics.split(",").indexOf(topicSel.value) >= 0;
-    });
-  });
-  document.querySelectorAll("[data-toggle-group]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var on = btn.dataset.on === "1";
-      document.querySelectorAll('[data-group="' + btn.dataset.toggleGroup + '"] input[type=checkbox]')
-        .forEach(function (cb) { cb.checked = on; });
-    });
-  });
-</script>
-{% endblock %}
+{% block title %}{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }} · Gear Watcher{% endblock %}
 {% block content %}
 {% set w = watch or {} %}
 <h1>{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }}</h1>
@@ -122,4 +105,21 @@
     <a href="{{ url_for('watches_page') }}" class="button btn-secondary">Abbrechen</a>
   </div>
 </form>
+<script>
+  // Themenwahl belegt die Quellen vor (nur bei Änderung, nicht beim Laden)
+  var topicSel = document.querySelector("select[name=topic]");
+  topicSel && topicSel.addEventListener("change", function () {
+    if (!topicSel.value) return;
+    document.querySelectorAll("input[name=sites]").forEach(function (cb) {
+      cb.checked = cb.dataset.topics.split(",").indexOf(topicSel.value) >= 0;
+    });
+  });
+  document.querySelectorAll("[data-toggle-group]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var on = btn.dataset.on === "1";
+      document.querySelectorAll('[data-group="' + btn.dataset.toggleGroup + '"] input[type=checkbox]')
+        .forEach(function (cb) { cb.checked = on; });
+    });
+  });
+</script>
 {% endblock %}
