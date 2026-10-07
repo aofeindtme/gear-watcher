@@ -77,6 +77,14 @@ def search(watch: dict, session) -> list[Listing]:
     return parse(r.json())
 
 
+def _price_text(price: float | None, currency: str) -> str:
+    """'1234.5', 'EUR' -> '1.234,50 €' (andere Währungen bleiben als Code stehen)."""
+    if price is None:
+        return ""
+    text = f"{price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{text} {'€' if currency in ('EUR', '') else currency}"
+
+
 def parse(data: dict) -> list[Listing]:
     results = []
     for it in data.get("itemSummaries", []):
@@ -91,8 +99,7 @@ def parse(data: dict) -> list[Listing]:
             title=it.get("title", ""),
             url=it.get("itemWebUrl", ""),
             price=price,
-            price_text=(f"{price_obj.get('value')} {price_obj.get('currency', '')}".strip() if price_obj else "")
-            + (" (Gebot)" if is_auction else ""),
+            price_text=_price_text(price, price_obj.get("currency", "")) + (" (Gebot)" if is_auction else ""),
             image=(it.get("image") or {}).get("imageUrl", ""),
             location=" ".join(x for x in [loc.get("postalCode", ""), loc.get("city", "")] if x),
             condition=it.get("condition", ""),
