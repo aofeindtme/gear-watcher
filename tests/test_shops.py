@@ -51,3 +51,54 @@ def test_empty_marker(monkeypatch):
         text = '<body class="p-catalog-all-products"></body>'
     monkeypatch.setattr(shops, "get", lambda *a, **k: R())
     assert shops.make_search("doublealpha")({"query": "x"}, None) == []
+
+
+def test_cards_zooplus_preset_and_sponsored_skip():
+    html = """<div data-zta="product-card" data-variant-id="19180">
+      <a data-zta="product-info" href="/shop/hunde/retrieverleine/10917?activeVariant=19180">
+        <span data-zta="product-link">HUNTER Retriever-Führleine</span><p data-zta="variant-desc">260 cm</p></a>
+      <span data-zta="reducedPriceRefPriceAmount">45,99 €</span><span data-zta="reducedPriceAmount">23,99 €</span></div>
+      <div data-zta="product-card" data-variant-id="1"><a data-zta="product-info" href="https://ads.example/r?x=1">
+        <span data-zta="product-link">Gesponsert</span></a><span class="z-product-price__amount">1,00 €</span></div>"""
+    items = shops.parse_cards(html, "zooplus", "https://www.zooplus.de", shops.CARD_PRESETS["zooplus"])
+    assert len(items) == 1
+    i = items[0]
+    assert (i.ext_id, i.title, i.price) == ("19180", "HUNTER Retriever-Führleine 260 cm", 23.99)
+    assert i.url == "https://www.zooplus.de/shop/hunde/retrieverleine/10917" and "statt 45,99" in i.price_text
+
+
+def test_cards_stock_text():
+    cfg = shops.SHOPS["mindfactory"]["cards"]
+    html = """<div class="pcontent"><a class="p-complete-link" href="https://www.mindfactory.de/p/1"></a>
+      <div class="pname">Samsung 990 PRO</div><div class="pshipping">Nicht lieferbar</div>
+      <div class="pprice">€ 208,60*</div></div>"""
+    i = shops.parse_cards(html, "mindfactory", "https://www.mindfactory.de", cfg)[0]
+    assert (i.title, i.price, i.available) == ("Samsung 990 PRO", 208.6, False)
+
+
+def test_shopify_suggest():
+    data = {"resources": {"results": {"products": [
+        {"id": 5, "title": "GHOST Hybrid Holster", "url": "/products/ghost-hybrid?_pos=1", "price": "46.99",
+         "compare_at_price_max": "59.90", "available": False, "image": "https://cdn/x.jpg"}]}}}
+    i = shops.parse_shopify_suggest(data, "dynamicshooting", "https://www.dynamic-shooting.at")[0]
+    assert (i.ext_id, i.price, i.available) == ("5", 46.99, False)
+    assert i.url == "https://www.dynamic-shooting.at/products/ghost-hybrid" and "statt 59,90" in i.price_text
+
+
+def test_fuzzy_shop_requires_all_words(monkeypatch):
+    class R:
+        status_code = 200
+        text = """<main class="product-list-container">
+          <article><a href="/p/x1/1"><h3>Lenovo ThinkPad X1</h3><span class="font-semibold">564,51 €</span></a></article>
+          <article><a href="/p/xbox/2"><h3>Microsoft Xbox</h3><span class="font-semibold">400 €</span></a></article></main>"""
+    monkeypatch.setattr(shops, "get", lambda *a, **k: R())
+    items = shops.make_search("refurbed")({"query": "thinkpad x1"}, None)
+    assert [i.title for i in items] == ["Lenovo ThinkPad X1"]
+
+
+def test_grube_parser_on_bergzeit_prices_with_euro_sign():
+    elements = [{"type": "product", "data": {"productId": "5057367", "name": "Trail 30 Rucksack", "url": "/p/trail-30/5057367/",
+                 "price": {"current": "119,20 €", "old": "154,95 €", "priceForSchemaOrgOffer": "119.2"}}}]
+    html = "<script>x = { elementsList: " + json.dumps(elements) + " }</script>"
+    i = shops.parse_grube(html, "bergzeit", "https://www.bergzeit.de")[0]
+    assert (i.price, i.price_text) == (119.2, "119,20 € (statt 154,95 €)")

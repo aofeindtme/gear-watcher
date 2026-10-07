@@ -123,3 +123,41 @@ def test_sorting(env):
     watcher.run_watch(db.get_watch(wid))
     assert [l["ext_id"] for l in db.list_listings(uid, sort="drop")][:2] == ["1", "3"]
     assert db.list_listings(uid, sort="nonsense")  # unbekannt -> Standard, kein SQL-Fehler
+
+
+def test_failed_first_run_stays_baseline(env):
+    db, watcher, uid, wid, results, sent = env
+    def boom(w, s):
+        raise RuntimeError("HTTP 502")
+    search = watcher.SOURCES["fake"]["search"]
+    watcher.SOURCES["fake"]["search"] = boom
+    watcher.run_watch(db.get_watch(wid))                     # Erstabruf scheitert (Seite down)
+    watcher.SOURCES["fake"]["search"] = search
+    results["items"] = [item(i, 10) for i in range(8)]
+    watcher.run_watch(db.get_watch(wid))                     # erster Erfolg: still übernehmen
+    assert sent == []
+    results["items"].append(item(99, 10))
+    watcher.run_watch(db.get_watch(wid))
+    assert len(sent) == 1 and "Item 99" in sent[0]
+
+
+def test_error_after_success_keeps_baseline_done(env):
+    db, watcher, uid, wid, results, sent = env
+    watcher.run_watch(db.get_watch(wid))                     # Baseline (0 Treffer)
+    search = watcher.SOURCES["fake"]["search"]
+    watcher.SOURCES["fake"]["search"] = lambda w, s: (_ for _ in ()).throw(RuntimeError("down"))
+    watcher.run_watch(db.get_watch(wid))
+    watcher.SOURCES["fake"]["search"] = search
+    results["items"] = [item(1, 10)]
+    watcher.run_watch(db.get_watch(wid))                     # Neues nach dem Ausfall wird gemeldet
+    assert len(sent) == 1
+
+
+def test_credentials_added_later_start_silently(env):
+    db, watcher, uid, wid, results, sent = env
+    watcher.SOURCES["fake"]["needs"] = ("ebay_client_id",)
+    results["items"] = [item(i, 10) for i in range(8)]
+    watcher.run_watch(db.get_watch(wid))                     # ohne Zugangsdaten übersprungen
+    db.save_user_settings(uid, {"ebay_client_id": "x"})
+    watcher.run_watch(db.get_watch(wid))
+    assert sent == []

@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Suche bearbeiten' if watch_id else 'Neue Suche' }} · Gear Watcher<script>
+  // Themenwahl belegt die Quellen vor (nur bei Änderung, nicht beim Laden)
+  var topicSel = document.querySelector("select[name=topic]");
+  topicSel && topicSel.addEventListener("change", function () {
+    if (!topicSel.value) return;
+    document.querySelectorAll("input[name=sites]").forEach(function (cb) {
+      cb.checked = cb.dataset.topics.split(",").indexOf(topicSel.value) >= 0;
+    });
+  });
   document.querySelectorAll("[data-toggle-group]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var on = btn.dataset.on === "1";
@@ -20,23 +28,47 @@
   <p class="muted small">Ohne Häkchen entscheidet die jeweilige Website, was passt - Shops liefern dann oft auch Treffer, die nur eines der Wörter enthalten.</p>
   <label>Name (optional) <input name="name" value="{{ w.name or '' }}" placeholder="wie der Suchbegriff"></label>
 
+  <label>Thema
+    <select name="topic">
+      <option value="">– kein Thema –</option>
+      {% for key, label in TOPICS.items() %}
+      <option value="{{ key }}" {{ 'selected' if (w.topic or '') == key }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p class="muted small">Ein Thema hakt die passenden Quellen an (vorhandene Häkchen werden ersetzt), danach frei anpassbar.</p>
+
   <fieldset>
     <legend>Quellen für den Suchbegriff</legend>
     {% set chosen = (w.sites if w.sites is defined and w.sites is not none else 'egun,kleinanzeigen,frankonia_kleinanzeigen').split(',') %}
-    {% for kind, heading in [('classifieds', 'Kleinanzeigen & Auktionen – meldet neue Angebote'), ('shop', 'Shops (Neuware) – meldet neue Produkte, Preissenkungen, wieder lieferbar')] %}
+    {% set groups = [('all', 'Überall – Kleinanzeigen, Deals, Preisalarme')] + TOPICS.items() | list %}
+    {% for group, heading in groups %}
+      {% set members = [] %}
+      {% for key, src in SOURCES.items() if not src.hidden %}
+        {% if (group == 'all' and src.topics | length == TOPICS | length) or (group != 'all' and src.topics | length < TOPICS | length and src.topics[0] == group) %}
+          {% set _ = members.append(key) %}
+        {% endif %}
+      {% endfor %}
+      {% if members %}
       <p class="small group-head"><strong>{{ heading }}</strong>
-        <button type="button" class="btn-small btn-secondary" data-toggle-group="{{ kind }}" data-on="1">alle</button>
-        <button type="button" class="btn-small btn-secondary" data-toggle-group="{{ kind }}" data-on="0">keine</button>
+        <button type="button" class="btn-small btn-secondary" data-toggle-group="{{ group }}" data-on="1">alle</button>
+        <button type="button" class="btn-small btn-secondary" data-toggle-group="{{ group }}" data-on="0">keine</button>
       </p>
-      <div class="source-grid" data-group="{{ kind }}">
-      {% for key, src in SOURCES.items() if src.kind == kind and not src.hidden %}
+      <div class="source-grid" data-group="{{ group }}">
+      {% for key in members %}
+      {% set src = SOURCES[key] %}
       {% set missing = src.needs | default([]) | reject('in', configured) | list %}
-      <label class="check"><input type="checkbox" name="sites" value="{{ key }}" {{ 'checked' if key in chosen }}> {{ src.label }}
-        {% if missing %}<span class="muted small">– erst unter <a href="{{ url_for('settings_page') }}">Einstellungen</a> API-Zugang eintragen</span>{% endif %}
+      <label class="check"><input type="checkbox" name="sites" value="{{ key }}" data-topics="{{ src.topics | join(',') }}" {{ 'checked' if key in chosen }}> {{ src.label }}
+        {% if src.kind == 'classifieds' and group != 'all' %}<span class="muted small">(Kleinanzeigen)</span>{% endif %}
+        {% if missing %}<span class="muted small">– erst unter <a href="{{ url_for('settings_page') }}">Einstellungen</a> einrichten</span>{% endif %}
       </label>
       {% endfor %}
       </div>
+      {% endif %}
     {% endfor %}
+    <p class="muted small">Kleinanzeigen & Auktionen melden neue Angebote, Shops zusätzlich Preissenkungen und
+      „wieder lieferbar“. <strong>mydealz</strong> und <strong>Preisalarm-Mails</strong> prüfen alle Suchwörter selbst
+      (mydealz im Deal-Titel, Mails in Betreff und Text).</p>
   </fieldset>
 
   <fieldset>

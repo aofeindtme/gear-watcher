@@ -20,12 +20,17 @@ USER_SETTING_DEFAULTS = {
     "ntfy_password": "",
     "ebay_client_id": "",
     "ebay_client_secret": "",
+    "imap_host": "",
+    "imap_port": "993",
+    "imap_user": "",
+    "imap_password": "",
+    "imap_folder": "INBOX",
 }
 
 WATCH_FIELDS = [
     "name", "query", "sites", "min_price", "max_price", "zip_code", "radius_km",
     "condition", "exclude_words", "search_description", "interval_min",
-    "notify_price_drop", "active", "urls", "require_all_words",
+    "notify_price_drop", "active", "urls", "require_all_words", "topic",
 ]
 
 # Spalten, die nach der ersten Version dazukamen: (Tabelle, Spalte, Definition)
@@ -33,6 +38,8 @@ MIGRATIONS = [
     ("watches", "urls", "TEXT"),
     ("listings", "available", "INTEGER"),
     ("watches", "require_all_words", "INTEGER NOT NULL DEFAULT 1"),
+    ("watch_site_state", "last_ok_at", "TEXT"),
+    ("watches", "topic", "TEXT NOT NULL DEFAULT ''"),
 ]
 
 
@@ -91,9 +98,9 @@ def init_db():
             created_at TEXT NOT NULL,
             last_run_at TEXT
         );
-        -- Stand je Suche+Quelle. Fehlt die Zeile, ist der nächste Lauf ein
-        -- "Baseline"-Lauf: Treffer werden still als gesehen gespeichert statt
-        -- 25 Push-Nachrichten auf einmal zu verschicken.
+        -- Stand je Suche+Quelle. Solange last_ok_at fehlt (Quelle lief noch nie
+        -- erfolgreich), ist der nächste Lauf ein "Baseline"-Lauf: Treffer werden
+        -- still als gesehen gespeichert statt 25 Push-Nachrichten auf einmal.
         CREATE TABLE IF NOT EXISTS watch_site_state (
             watch_id INTEGER NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
             site TEXT NOT NULL,
@@ -141,6 +148,9 @@ def init_db():
             existing = {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
             if column not in existing:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        # Zeilen von vor last_ok_at: ohne Fehler gespeichert = lief schon erfolgreich
+        c.execute("UPDATE watch_site_state SET last_ok_at=last_run_at "
+                  "WHERE last_ok_at IS NULL AND last_error IS NULL")
         if not c.execute("SELECT 1 FROM app_settings WHERE key='secret_key'").fetchone():
             c.execute("INSERT INTO app_settings VALUES ('secret_key', ?)", (secrets.token_hex(32),))
 
@@ -286,11 +296,14 @@ def get_site_states(watch_id: int) -> dict:
 
 
 def save_site_state(watch_id: int, site: str, count: int | None, error: str | None):
+    ts = now()
     with conn() as c:
         c.execute(
-            "INSERT INTO watch_site_state VALUES (?,?,?,?,?) ON CONFLICT(watch_id, site) DO UPDATE SET "
-            "last_run_at=excluded.last_run_at, last_count=excluded.last_count, last_error=excluded.last_error",
-            (watch_id, site, now(), count, error),
+            "INSERT INTO watch_site_state (watch_id, site, last_run_at, last_count, last_error, last_ok_at) "
+            "VALUES (?,?,?,?,?,?) ON CONFLICT(watch_id, site) DO UPDATE SET "
+            "last_run_at=excluded.last_run_at, last_count=excluded.last_count, last_error=excluded.last_error, "
+            "last_ok_at=COALESCE(excluded.last_ok_at, watch_site_state.last_ok_at)",
+            (watch_id, site, ts, count, error, None if error else ts),
         )
 
 

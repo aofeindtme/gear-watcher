@@ -9,12 +9,12 @@ Ergebnisse ohne JavaScript im HTML (oder über eine öffentliche JSON-API) stehe
 """
 import json
 import re
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
 from . import Listing, SourceError, get, parse_price, to_float
-from .shopware import parse_sw5_boxes, parse_sw6_boxes
+from .shopware import UNAVAILABLE_HINTS, parse_sw5_boxes, parse_sw6_boxes
 
 EMPTY_MARKERS = ("keine artikel", "keine produkte", "keine treffer", "keine ergebnisse", "0 treffer",
                  "no result", "no products", "nichts gefunden", "leider keine", "ergab keine",
@@ -99,8 +99,13 @@ def parse_woo_store_api(data: list, site: str) -> list[Listing]:
     return results
 
 
+def _euro(value) -> str:
+    v = str(value or "").strip()
+    return v if not v or "€" in v else f"{v} €"
+
+
 def parse_grube(html: str, site: str, base: str) -> list[Listing]:
-    """Grube (novomind iShop): Ergebnisse als JSON im App-State (elementsList)."""
+    """novomind iShop (Grube, Bergzeit): Ergebnisse als JSON im App-State (elementsList)."""
     m = re.search(r"elementsList\s*:\s*\[", html)
     if not m:
         return []
@@ -114,8 +119,10 @@ def parse_grube(html: str, site: str, base: str) -> list[Listing]:
         if el.get("type") != "product" or not d.get("name"):
             continue
         price = d.get("price") or {}
-        current = to_float(price.get("priceForSchemaOrgOffer")) or parse_price(f"{price.get('current', '')} €")
-        old = parse_price(f"{price.get('old', '')} €")
+        cur_text = _euro(price.get("current"))
+        old_text = _euro(price.get("old"))
+        current = to_float(price.get("priceForSchemaOrgOffer")) or parse_price(cur_text)
+        old = parse_price(old_text)
         url = urljoin(base, str(d.get("url") or "").split("?")[0])
         img = ((d.get("images") or [{}])[0] or {}).get("src", "")
         results.append(Listing(
@@ -124,8 +131,8 @@ def parse_grube(html: str, site: str, base: str) -> list[Listing]:
             title=d["name"],
             url=url,
             price=current,
-            price_text=("ab " if price.get("isFromPrice") else "") + f"{price.get('current', '').strip()} €"
-            + (f" (statt {price.get('old', '').strip()} €)" if old else ""),
+            price_text=("ab " if price.get("isFromPrice") else "") + cur_text
+            + (f" (statt {old_text})" if old else ""),
             image=img,
             condition=", ".join(x.get("text", "") if isinstance(x, dict) else str(x) for x in d.get("labels") or [])[:60],
         ))
@@ -240,46 +247,175 @@ def parse_modified(html: str, site: str, base: str) -> list[Listing]:
     return results
 
 
+def parse_cards(html: str, site: str, base: str, cfg: dict) -> list[Listing]:
+    """Produktkacheln per CSS-Selektoren aus der Shop-Konfiguration.
+
+    cfg: card (Kachel), link (darin; fehlt = Kachel ist selbst der Link), title (Liste von
+    Selektoren, Texte werden verbunden; fehlt = title-Attribut/Text des Links), price,
+    old (Streichpreis, optional), stock (Lieferstatus-Text, optional), id_attr (optional)."""
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    for card in soup.select(cfg["card"]):
+        link = card if not cfg.get("link") else card.select_one(cfg["link"])
+        price_el = card.select_one(cfg["price"])
+        if not link or not link.get("href") or not price_el:
+            continue
+        if cfg.get("title"):
+            parts = [el.get_text(" ", strip=True) for sel in cfg["title"] for el in card.select(sel)[:1]]
+            title = " ".join(p for p in parts if p)
+        else:
+            title = str(link.get("title") or link.get_text(" ", strip=True))
+        url = urljoin(base, str(link["href"])).split("#")[0].split("?")[0]
+        if urlsplit(url).netloc != urlsplit(base).netloc:
+            continue  # gesponserte Kachel mit Tracking-Link
+        price_text = price_el.get_text(" ", strip=True)
+        old_el = card.select_one(cfg["old"]) if cfg.get("old") else None
+        stock_el = card.select_one(cfg["stock"]) if cfg.get("stock") else None
+        stock = stock_el.get_text(" ", strip=True).lower() if stock_el else ""
+        if not title:
+            continue
+        results.append(Listing(
+            site=site,
+            ext_id=str(card.get(cfg["id_attr"]) or url) if cfg.get("id_attr") else url,
+            title=title,
+            url=url,
+            price=parse_price(price_text),
+            price_text=price_text + (f" (statt {old_el.get_text(' ', strip=True)})" if old_el else ""),
+            image=_img(card.select_one("img"), base),
+            available=(not any(h in stock for h in UNAVAILABLE_HINTS)) if stock else None,
+        ))
+    return results
+
+
+def parse_shopify_suggest(data: dict, site: str, base: str) -> list[Listing]:
+    """Shopify Predictive Search (/search/suggest.json) - öffentlich, max. 10 Produkte."""
+    results = []
+    for p in ((data.get("resources") or {}).get("results") or {}).get("products") or []:
+        price = to_float(p.get("price"))
+        old = to_float(p.get("compare_at_price_max"))
+        url = urljoin(base, str(p.get("url") or "").split("?")[0])
+        results.append(Listing(
+            site=site,
+            ext_id=str(p.get("id") or url),
+            title=p.get("title") or "",
+            url=url,
+            price=price,
+            price_text=(f"{price:.2f} €".replace(".", ",") if price is not None else "")
+            + (f" (statt {old:.2f} €)".replace(".", ",") if old and price and old > price else ""),
+            image=p.get("image") or p.get("featured_image", {}).get("url", "") or "",
+            available=p.get("available"),
+        ))
+    return results
+
+
 # ----------------------------------------------------------------------
 # Shop-Liste
 # ----------------------------------------------------------------------
 # path: Such-URL relativ zur Basis, {q} = Suchbegriff (URL-kodiert)
-# parser: Funktion(html, site, base) oder "woo" für die WooCommerce-Store-API
+# parser: Funktion(html, site, base), "woo" (WooCommerce-Store-API), "shopify"
+#         (Predictive-Search-JSON) oder "cards" (CSS-Selektoren unter "cards")
+# topics: Themen (sources.TOPICS), das erste bestimmt die Gruppe im Formular
 # empty_marker (optional): Text im HTML, an dem eine leere Ergebnisseite erkennbar ist
+# fuzzy (optional): Shop zeigt ohne Treffer Ersatzprodukte/Bestseller - Ergebnisse
+#        werden deshalb immer auf "alle Suchwörter im Titel" gefiltert.
 # Reihenfolge = Anzeige im Formular.
 
+SHOPIFY_PATH = "/search/suggest.json?q={q}&resources[type]=product&resources[limit]=10"
+WOO_PATH = "/wp-json/wc/store/v1/products?search={q}&per_page=50&orderby=date&order=desc"
+
 SHOPS = {
+    # --- Jagd ---
     "frankonia": None,  # eigener Adapter (sources/frankonia.py), hier nur für die Reihenfolge
-    "pirschergear": {"label": "Pirscher Gear", "base": "https://www.pirschergear.com",
+    "pirschergear": {"label": "Pirscher Gear", "base": "https://www.pirschergear.com", "topics": ["jagd", "outdoor"],
                      "path": "/search?search={q}", "parser": parse_sw6_boxes},
-    "pirschershop": {"label": "Pirscher Shop", "base": "https://www.pirschershop.de",
+    "pirschershop": {"label": "Pirscher Shop", "base": "https://www.pirschershop.de", "topics": ["jagd"],
                      "path": "/search?search={q}", "parser": parse_sw6_boxes},
     "hubertus": {"label": "Hubertus Fieldsports", "base": "https://www.hubertus-fieldsports.de",
-                 "path": "/search?search={q}", "parser": parse_sw6_boxes},
-    "grube": {"label": "Grube", "base": "https://www.grube.de",
-              "path": "/search/?q={q}", "parser": parse_grube},
-    "jagd_de": {"label": "jagd.de (Askari)", "base": "https://www.jagd.de",
+                 "topics": ["jagd", "outdoor"], "path": "/search?search={q}", "parser": parse_sw6_boxes},
+    "jagd_de": {"label": "jagd.de (Askari)", "base": "https://www.jagd.de", "topics": ["jagd"],
                 "path": "/index.php?cl=search&searchparam={q}&listorderby=Insert&listorder=desc",
                 "parser": parse_askari},
-    "jagdwelt24": {"label": "Jagdwelt24", "base": "https://www.jagdwelt24.de",
+    "jagdwelt24": {"label": "Jagdwelt24", "base": "https://www.jagdwelt24.de", "topics": ["jagd"],
                    "path": "/search/?qs={q}", "parser": parse_microdata_list},
-    "revolutionrace": {"label": "Revolution Race", "base": "https://www.revolutionrace.de",
-                       "path": "/suche?q={q}", "parser": parse_revolutionrace},
-    "triebel": {"label": "Sportwaffen Triebel", "base": "https://sportwaffen-triebel.de",
+    # nur österreichischer Store (Preise inkl. AT-MwSt.)
+    "kettner": {"label": "Kettner (AT)", "base": "https://www.kettner.com", "topics": ["jagd", "outdoor"],
+                "path": "/at_de/catalogsearch/result/?q={q}", "parser": "cards",
+                "cards": {"card": ".product-item-info", "link": "a.product-item-link",
+                          "title": ["a.product-item-link"],
+                          "price": "[data-price-type=finalPrice] .price, .price-final_price .price",
+                          "old": "[data-price-type=oldPrice] .price"}},
+    # --- Schießsport & IPSC ---
+    "triebel": {"label": "Sportwaffen Triebel", "base": "https://sportwaffen-triebel.de", "topics": ["schiessen", "jagd"],
                 "path": "/search?sSearch={q}", "parser": parse_sw5_boxes},
     "shootingequipment": {"label": "Shooting Equipment", "base": "https://shootingequipment.de",
-                          "path": "/wp-json/wc/store/v1/products?search={q}&per_page=50&orderby=date&order=desc",
-                          "parser": "woo"},
-    "atlas": {"label": "Atlas Taktik", "base": "https://www.atlas-taktik.de",
+                          "topics": ["schiessen"], "path": WOO_PATH, "parser": "woo"},
+    "atlas": {"label": "Atlas Taktik", "base": "https://www.atlas-taktik.de", "topics": ["schiessen"],
               "path": "/search?sSearch={q}", "parser": parse_sw5_boxes},
     "shootingsolutions": {"label": "Shooting Solutions", "base": "https://shooting-solutions.de",
-                          "path": "/search/?qs={q}", "parser": parse_microdata_list},
-    "doublealpha": {"label": "Double Alpha", "base": "https://www.doublealpha.biz",
+                          "topics": ["schiessen"], "path": "/search/?qs={q}", "parser": parse_microdata_list},
+    "doublealpha": {"label": "Double Alpha", "base": "https://www.doublealpha.biz", "topics": ["schiessen"],
                     "path": "/catalog/all-products?keywords={q}", "parser": parse_doublealpha,
                     # leere Suche = leere Katalogseite ohne Hinweistext
                     "empty_marker": "p-catalog-all-products"},
-    "sfc": {"label": "Shooters First Choice", "base": "https://www.shooters-first-choice.de",
+    "sfc": {"label": "Shooters First Choice", "base": "https://www.shooters-first-choice.de", "topics": ["schiessen"],
             "path": "/advanced_search_result.php?keywords={q}", "parser": parse_modified},
+    "dynamicshooting": {"label": "Dynamic Shooting (AT)", "base": "https://www.dynamic-shooting.at",
+                        "topics": ["schiessen"], "path": SHOPIFY_PATH, "parser": "shopify"},
+    # --- Outdoor ---
+    "grube": {"label": "Grube", "base": "https://www.grube.de", "topics": ["outdoor", "jagd"],
+              "path": "/search/?q={q}", "parser": parse_grube},
+    "bergzeit": {"label": "Bergzeit", "base": "https://www.bergzeit.de", "topics": ["outdoor"],
+                 "path": "/search/?q={q}", "parser": parse_grube},
+    "revolutionrace": {"label": "Revolution Race", "base": "https://www.revolutionrace.de", "topics": ["outdoor"],
+                       "path": "/suche?q={q}", "parser": parse_revolutionrace},
+    # --- Bijou (Hund) ---
+    "zooplus": {"label": "Zooplus", "base": "https://www.zooplus.de", "topics": ["bijou"],
+                "path": "/search/results?q={q}", "parser": "cards", "cards": "zooplus"},
+    "bitiba": {"label": "Bitiba", "base": "https://www.bitiba.de", "topics": ["bijou"],
+               "path": "/search/results?q={q}", "parser": "cards", "cards": "zooplus"},
+    "fressnapf": {"label": "Fressnapf", "base": "https://www.fressnapf.de", "topics": ["bijou"],
+                  "path": "/search/?text={q}", "parser": "cards",
+                  "cards": {"card": ".product-teaser", "link": "a.pt-header",
+                            "title": [".pt-subhead", ".pt-head"], "price": ".pt-price"}},
+    "ruffwear": {"label": "Ruffwear", "base": "https://ruffwear.eu", "topics": ["bijou", "outdoor"],
+                 "path": SHOPIFY_PATH, "parser": "shopify"},
+    # --- Bienen ---
+    "bienenruck": {"label": "Bienen Ruck", "base": "https://www.bienen-ruck.de", "topics": ["bienen"],
+                   "path": "/search?search={q}", "parser": parse_sw6_boxes},
+    "graze": {"label": "Graze", "base": "https://www.graze.eu", "topics": ["bienen"],
+              "path": "/search?q={q}", "parser": parse_microdata_list},
+    "kellmann": {"label": "Kellmann", "base": "https://kellmann.de", "topics": ["bienen"],
+                 "path": WOO_PATH, "parser": "woo"},
+    # --- IT ---
+    "mindfactory": {"label": "Mindfactory", "base": "https://www.mindfactory.de", "topics": ["it"],
+                    "path": "/search_result.php?search_query={q}", "parser": "cards",
+                    "cards": {"card": ".pcontent", "link": "a.p-complete-link", "title": [".pname"],
+                              "price": ".pprice", "stock": ".pshipping"}},
+    "alternate": {"label": "Alternate", "base": "https://www.alternate.de", "topics": ["it"], "fuzzy": True,
+                  "path": "/listing.xhtml?q={q}", "parser": "cards",
+                  "cards": {"card": "a.productBox", "title": [".product-name", ".product-name-sub"],
+                            "price": ".price", "stock": ".delivery-info"}},
+    "refurbed": {"label": "Refurbed", "base": "https://www.refurbed.de", "topics": ["it"], "fuzzy": True,
+                 "path": "/search/?query={q}", "parser": "cards",
+                 "cards": {"card": "main.product-list-container article", "link": "a", "title": ["h3"],
+                           "price": "span.font-semibold", "old": "del"}},
+    "afb": {"label": "AfB (refurbished)", "base": "https://www.afbshop.de", "topics": ["it"],
+            "path": "/search?search={q}", "parser": parse_sw6_boxes},
+    # --- Gesundheit ---
+    "shopapotheke": {"label": "Shop Apotheke", "base": "https://www.shop-apotheke.com", "topics": ["gesundheit"],
+                     "fuzzy": True,
+                     "path": "/search.htm?q={q}", "parser": "cards",
+                     "cards": {"card": "[data-qa-id=result-list-entry]", "link": "a.link_overlay",
+                               "title": ["[data-qa-id=serp-result-item-title]"],
+                               "price": "[data-qa-id=entry-price]", "stock": "[data-qa-id=product-status-qa-id]"}},
+}
+
+# Mehrfach genutzte Kachel-Konfigurationen
+CARD_PRESETS = {
+    "zooplus": {"card": "[data-zta=product-card]", "link": "a[data-zta=product-info]", "id_attr": "data-variant-id",
+                "title": ["[data-zta=product-link]", "[data-zta=variant-desc]"],
+                "price": "[data-zta=reducedPriceAmount], .z-product-price__amount",
+                "old": "[data-zta=reducedPriceRefPriceAmount]"},
 }
 
 
@@ -289,12 +425,25 @@ def make_search(key: str):
     def search(watch: dict, session) -> list[Listing]:
         url = shop["base"] + shop["path"].format(q=quote_plus(watch["query"]))
         r = get(session, url, ok_status=(200, 404, 410))  # manche Shops: "keine Treffer" = 404/410
-        if shop["parser"] == "woo":
+        if shop["parser"] in ("woo", "shopify"):
             if r.status_code != 200:
                 raise SourceError(f"{shop['label']}: HTTP {r.status_code}")
-            return parse_woo_store_api(r.json(), key)
+            if shop["parser"] == "woo":
+                return parse_woo_store_api(r.json(), key)
+            return parse_shopify_suggest(r.json(), key, shop["base"])
+        if shop.get("fuzzy"):
+            words = [w.lower() for w in watch["query"].split()]
+            return [i for i in _parse(r.text) if all(w in i.title.lower() for w in words)]
+        return _check_empty(r, _parse(r.text))
+
+    def _parse(html: str) -> list[Listing]:
+        if shop["parser"] == "cards":
+            cfg = shop["cards"]
+            return parse_cards(html, key, shop["base"], CARD_PRESETS[cfg] if isinstance(cfg, str) else cfg)
+        return shop["parser"](html, key, shop["base"])
+
+    def _check_empty(r, items: list[Listing]) -> list[Listing]:
         html = r.text
-        items = shop["parser"](html, key, shop["base"])
         if items:
             return items
         lower = html.lower()

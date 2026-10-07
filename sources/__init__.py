@@ -109,25 +109,47 @@ def to_float(value) -> float | None:
         return None
 
 
+# Themen: steuern die Gruppen im Formular und welche Quellen eine Themenwahl vorbelegt.
+TOPICS = {
+    "jagd": "Jagd",
+    "schiessen": "Schießsport & IPSC",
+    "outdoor": "Outdoor",
+    "bijou": "Bijou (Hund)",
+    "bienen": "Bienen",
+    "it": "IT",
+    "gesundheit": "Gesundheit",
+}
+ALL_TOPICS = list(TOPICS)
+
 # Registry: Schlüssel = wie in der DB gespeichert, Reihenfolge = Anzeige im UI.
-# kind:    classifieds = Kleinanzeigen/Auktionen, shop = Neuware
+# kind:    classifieds = Kleinanzeigen/Auktionen, deals = Deal-/Preisalarm-Quellen, shop = Neuware
+# topics:  Themen der Quelle (das erste = Gruppe im Formular), ALL_TOPICS = themenübergreifend
 # filters: was die Seite selbst filtert (Rest filtert watcher.apply_filters)
 # needs:   Einstellungen, ohne die die Quelle nicht nutzbar ist
-from . import ebay, egun, frankonia, frankonia_kleinanzeigen, kleinanzeigen, shops, url  # noqa: E402
+from . import (ebay, egun, frankonia, frankonia_kleinanzeigen, kleinanzeigen, mail, mydealz,  # noqa: E402
+               shops, url)
 
 SOURCES = {
-    "egun": {"label": "eGun", "kind": "classifieds", "search": egun.search,
-             "filters": {"price", "zip", "condition"}},
     "kleinanzeigen": {"label": "Kleinanzeigen", "kind": "classifieds", "search": kleinanzeigen.search,
-                      "filters": {"price", "zip"}},
-    "frankonia_kleinanzeigen": {"label": "Frankonia-Kleinanzeigen", "kind": "classifieds",
-                                "search": frankonia_kleinanzeigen.search, "filters": {"price", "zip"}},
-    "ebay": {"label": "eBay", "kind": "classifieds", "search": ebay.search,
+                      "filters": {"price", "zip"}, "topics": ALL_TOPICS},
+    "ebay": {"label": "eBay", "kind": "classifieds", "search": ebay.search, "topics": ALL_TOPICS,
              "filters": {"price", "condition"}, "needs": ("ebay_client_id", "ebay_client_secret")},
-    "frankonia": {"label": "Frankonia", "kind": "shop", "search": frankonia.search, "filters": set()},
+    "mydealz": {"label": "mydealz", "kind": "deals", "search": mydealz.search, "filters": set(),
+                "topics": ALL_TOPICS},
+    "mail": {"label": "Preisalarm-Mails (idealo, Geizhals)", "kind": "deals", "search": mail.search,
+             "filters": set(), "topics": ALL_TOPICS, "needs": ("imap_host", "imap_user", "imap_password")},
+    "egun": {"label": "eGun", "kind": "classifieds", "search": egun.search,
+             "filters": {"price", "zip", "condition"}, "topics": ["jagd", "schiessen"]},
+    "frankonia_kleinanzeigen": {"label": "Frankonia-Kleinanzeigen", "kind": "classifieds",
+                                "search": frankonia_kleinanzeigen.search, "filters": {"price", "zip"},
+                                "topics": ["jagd", "schiessen"]},
+    "frankonia": {"label": "Frankonia", "kind": "shop", "search": frankonia.search, "filters": set(),
+                  "topics": ["jagd", "schiessen", "outdoor"]},
     # alle weiteren Shops aus sources/shops.py (konfigurationsgetrieben)
-    **{key: {"label": shop["label"], "kind": "shop", "search": shops.make_search(key), "filters": set()}
+    **{key: {"label": shop["label"], "kind": "shop", "search": shops.make_search(key), "filters": set(),
+             "topics": shop["topics"]}
        for key, shop in shops.SHOPS.items() if shop},
     # Kein Häkchen im Formular: läuft automatisch, sobald eine Suche URLs enthält.
-    "url": {"label": "Shop-URL", "kind": "shop", "search": url.search, "filters": set(), "hidden": True},
+    "url": {"label": "Shop-URL", "kind": "shop", "search": url.search, "filters": set(), "hidden": True,
+            "topics": []},
 }

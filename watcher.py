@@ -42,8 +42,9 @@ def apply_filters(watch: dict, listings: list, site_filters: set) -> list:
         title = item.title.lower()
         if any(w in title for w in excludes):
             continue
-        # Shop-URLs: bewusst eingetragen, Kategorieseiten filtert sources/url.py selbst
-        if item.site != "url" and any(w not in title for w in required):
+        # Shop-URLs: bewusst eingetragen, Kategorieseiten filtert sources/url.py selbst;
+        # Preisalarm-Mails prüfen die Wörter in Betreff und Text (sources/mail.py)
+        if item.site not in ("url", "mail") and any(w not in title for w in required):
             continue
         # Auktionen: aktuelles Gebot ist kein Endpreis -> Preisfilter nur, wenn
         # die Seite ihn selbst anwendet (dort zählt dann ihre Logik).
@@ -98,7 +99,9 @@ def run_watch(watch, session=None) -> dict:
 
     for site in active_sites(watch):
         src = SOURCES[site]
-        baseline = site not in states
+        # Baseline, bis die Quelle einmal geklappt hat - sonst meldet eine Quelle,
+        # die beim Erstabruf ausfiel oder erst später Zugangsdaten bekam, alles als neu.
+        baseline = site not in states or not states[site]["last_ok_at"]
         missing = [k for k in src.get("needs", ()) if not user_settings.get(k)]
         if missing:
             db.save_site_state(watch["id"], site, None, "Zugangsdaten fehlen (Einstellungen)")

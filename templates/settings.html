@@ -33,6 +33,24 @@
 </form>
 
 <form method="post" class="card form">
+  <h2>Preisalarm-Postfach (optional)</h2>
+  <p class="muted small">
+    idealo und Geizhals sperren automatische Abrufe. Stattdessen dort einen Preisalarm (idealo „Preiswecker“,
+    Geizhals „Preisalarm“) mit einer <strong>eigens dafür angelegten</strong> E-Mail-Adresse einrichten und das
+    Postfach hier eintragen. Gear Watcher liest es nur (IMAP, markiert nichts als gelesen) und meldet jede Mail,
+    deren Betreff oder Text die Suchwörter enthält, als Treffer der Quelle „Preisalarm-Mails“.
+  </p>
+  <div class="row">
+    <label>IMAP-Server <input name="imap_host" value="{{ settings.imap_host }}" placeholder="z. B. imap.example.de" autocomplete="off"></label>
+    <label>Port <input name="imap_port" inputmode="numeric" value="{{ settings.imap_port }}"></label>
+  </div>
+  <label>Benutzer <input name="imap_user" value="{{ settings.imap_user }}" autocomplete="off"></label>
+  <label>Passwort <input name="imap_password" type="password" value="{{ settings.imap_password }}" autocomplete="off"></label>
+  <label>Ordner <input name="imap_folder" value="{{ settings.imap_folder }}"></label>
+  <div class="actions"><button type="submit" name="action" value="imap">Speichern</button></div>
+</form>
+
+<form method="post" class="card form">
   <h2>Passwort ändern</h2>
   <label>Aktuelles Passwort <input name="current" type="password" autocomplete="current-password" required></label>
   <label>Neues Passwort <input name="new" type="password" autocomplete="new-password" minlength="8" required></label>

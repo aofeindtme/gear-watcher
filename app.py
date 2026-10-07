@@ -10,7 +10,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import db
 import notify
 import watcher
-from sources import SOURCES
+from sources import SOURCES, TOPICS
 from sources.url import split_urls
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -58,7 +58,7 @@ def current_user():
 def inject_globals():
     user = current_user()
     configured = [k for k, v in db.get_user_settings(user["id"]).items() if v] if user else []
-    return {"user": user, "SOURCES": SOURCES, "fmt_price": watcher._fmt_price,
+    return {"user": user, "SOURCES": SOURCES, "TOPICS": TOPICS, "fmt_price": watcher._fmt_price,
             "active_sites": watcher.active_sites, "configured": configured}
 
 
@@ -165,6 +165,7 @@ def _watch_from_form(form) -> tuple[dict, list[str]]:
         "notify_price_drop": int(bool(form.get("notify_price_drop"))),
         "active": int(bool(form.get("active"))),
         "urls": "\n".join(urls),
+        "topic": form.get("topic", "") if form.get("topic", "") in TOPICS else "",
     }
     try:
         values["min_price"] = _float_or_none(form.get("min_price"))
@@ -262,7 +263,7 @@ def settings_page():
     user = current_user()
     if request.method == "POST":
         action = request.form.get("action")
-        if action in ("ntfy", "ebay"):
+        if action in ("ntfy", "ebay", "imap"):
             # nur die Felder des abgeschickten Formulars - sonst leert "ntfy speichern" die eBay-Daten
             db.save_user_settings(user["id"], {k: request.form.get(k, "").strip()
                                                for k in db.USER_SETTING_DEFAULTS if k in request.form})
