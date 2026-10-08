@@ -108,3 +108,18 @@ def test_egun_title_without_new_badge():
       <span class="list-item__title-text"><span class="badge badge--new">neu</span> Zielfernrohr Z8i</span>
       <span class="list-item__price">100,00 €</span></a></li>"""
     assert egun.parse(html)[0].title == "Zielfernrohr Z8i"
+
+
+def test_product_page_productgroup_picks_page_variant():
+    import json as _json
+    from sources import url
+    ld = {"@type": "BuyAction", "object": {"@type": "ProductGroup", "name": "fenix 8", "hasVariant": [
+        {"@type": "Product", "sku": "2948139", "name": "fenix 8 43 mm",
+         "offers": {"url": "/de/product/_fenix-8-43-2948139.html", "price": 669.99,
+                    "availability": "https://schema.org/InStock"}},
+        {"@type": "Product", "sku": "2948141", "name": "fenix 8 47 mm",
+         "offers": {"url": "/de/product/_fenix-8-47-2948141.html", "price": 699.0,
+                    "availability": "https://schema.org/OutOfStock"}}]}}
+    html = f'<script type="application/ld+json">{_json.dumps(ld)}</script>'
+    item = url.parse_product_page(html, "https://www.saturn.de/de/product/_fenix-8-47-2948141.html")
+    assert (item.title, item.price, item.available) == ("fenix 8 47 mm", 699.0, False)

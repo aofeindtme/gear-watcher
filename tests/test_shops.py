@@ -102,3 +102,20 @@ def test_grube_parser_on_bergzeit_prices_with_euro_sign():
     html = "<script>x = { elementsList: " + json.dumps(elements) + " }</script>"
     i = shops.parse_grube(html, "bergzeit", "https://www.bergzeit.de")[0]
     assert (i.price, i.price_text) == (119.2, "119,20 € (statt 154,95 €)")
+
+
+def test_mediamarkt_strike_price_and_marketplace():
+    html = """<div data-test="mms-product-card">
+      <a href="/de/product/_garmin-fenix-8-47-mm-2948141.html"><p data-test="product-title">GARMIN fenix 8 47 mm</p></a>
+      <div data-test="mms-price"><span data-test="mms-strike-price-label">UVP</span>
+        <span aria-hidden="true">799,99&nbsp;€</span><span>799,99€</span>
+        <span aria-hidden="true">669,99&nbsp;€</span><span>669,99€</span></div>
+      <div data-test="product-delivery">Lieferung nach Hause 09.10.2026</div></div>
+    <div data-test="mms-product-card">
+      <a href="/de/product/_garmin-fenix-8-gold-157846604.html"><p data-test="product-title">GARMIN fenix 8 Gold</p></a>
+      <div data-test="mms-price"><span aria-hidden="true">919,13&nbsp;€</span></div>
+      <a data-test="mms-third-party-provider-link" href="/de/marketplace/x">Händler</a></div>"""
+    a, b = shops.parse_mediamarkt(html, "mediamarkt", "https://www.mediamarkt.de")
+    assert (a.ext_id, a.price, a.available, a.condition) == ("2948141", 669.99, True, "")
+    assert "statt 799,99" in a.price_text
+    assert (b.ext_id, b.price, b.condition) == ("157846604", 919.13, "Marktplatz")

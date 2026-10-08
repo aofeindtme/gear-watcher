@@ -2,6 +2,7 @@ import os
 import logging
 import datetime as dt
 from functools import wraps
+from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 
 from flask import Flask, request, redirect, url_for, render_template, session, flash, abort
@@ -54,12 +55,28 @@ def current_user():
     return db.get_user_by_id(user_id) if user_id else None
 
 
+# Preisalarme legt man bei idealo/Geizhals selbst an (sie sperren automatische Abrufe) -
+# diese Links führen direkt zur Suche dort, Platzhalter {q} = Suchbegriff (URL-kodiert).
+PRICE_ALERT_SITES = {
+    "idealo": "https://www.idealo.de/preisvergleich/MainSearchProductCategory.html?q={q}",
+    "Geizhals": "https://geizhals.de/?fs={q}",
+}
+
+
+def price_alert_links(query: str | None) -> list[tuple[str, str]]:
+    q = quote_plus((query or "").strip())
+    return [(label, tpl.format(q=q)) for label, tpl in PRICE_ALERT_SITES.items()] if q else []
+
+
 @app.context_processor
 def inject_globals():
     user = current_user()
-    configured = [k for k, v in db.get_user_settings(user["id"]).items() if v] if user else []
+    settings = db.get_user_settings(user["id"]) if user else {}
+    configured = [k for k, v in settings.items() if v]
     return {"user": user, "SOURCES": SOURCES, "TOPICS": TOPICS, "fmt_price": watcher._fmt_price,
-            "active_sites": watcher.active_sites, "configured": configured}
+            "active_sites": watcher.active_sites, "configured": configured,
+            "price_alert_links": price_alert_links, "PRICE_ALERT_SITES": PRICE_ALERT_SITES,
+            "alert_mailbox": settings.get("imap_user") or ""}
 
 
 LOCAL_TZ = ZoneInfo(os.environ.get("TZ") or "Europe/Berlin")

@@ -47,6 +47,15 @@
       </label>
       {% endfor %}
       </div>
+      {% if group == 'all' %}
+      <div class="alert-links small" id="alert-links" hidden>
+        <span>Preisalarm für „<span id="alert-query"></span>“ anlegen:</span>
+        {% for label, tpl in PRICE_ALERT_SITES.items() %}
+        <a data-tpl="{{ tpl }}" target="_blank" rel="noopener" class="button btn-small btn-secondary">{{ label }} ↗</a>
+        {% endfor %}
+        {% if '@' in alert_mailbox %}<span class="muted">an <code>{{ alert_mailbox }}</code></span>{% endif %}
+      </div>
+      {% endif %}
       {% endif %}
     {% endfor %}
     <p class="muted small">Kleinanzeigen & Auktionen melden neue Angebote, Shops zusätzlich Preissenkungen und
@@ -64,7 +73,8 @@
       <strong>Kategorieseite</strong> (Shopware-, JTL- und Frankonia-Shops): meldet neue Produkte – ein
       Suchbegriff wirkt dort als Titelfilter (alle Wörter müssen vorkommen).
       Einziger Weg für <strong>Recon, Alljagd, Living Active, Volber</strong> (Suche per robots.txt gesperrt)
-      und <strong>TACWRK</strong> (Suche nur per JavaScript).
+      und <strong>TACWRK</strong> (Suche nur per JavaScript), bei <strong>Saturn</strong> und <strong>Coolblue</strong>
+      (Suche ebenfalls gesperrt) für Produktseiten.
       Seiten, deren robots.txt den Abruf verbietet, werden übersprungen.
     </p>
   </fieldset>
@@ -114,11 +124,28 @@
       cb.checked = cb.dataset.topics.split(",").indexOf(topicSel.value) >= 0;
     });
   });
+  // idealo/Geizhals-Links folgen dem Suchbegriff, sichtbar nur mit Quelle "Preisalarm-Mails"
+  var queryInput = document.querySelector("input[name=query]");
+  var mailBox = document.querySelector("input[name=sites][value=mail]");
+  var alertLinks = document.getElementById("alert-links");
+  function updateAlertLinks() {
+    if (!alertLinks) return;
+    var q = queryInput.value.trim();
+    alertLinks.hidden = !q || !(mailBox && mailBox.checked);
+    document.getElementById("alert-query").textContent = q;
+    alertLinks.querySelectorAll("a[data-tpl]").forEach(function (a) {
+      a.href = a.dataset.tpl.replace("{q}", encodeURIComponent(q).replace(/%20/g, "+"));
+    });
+  }
+  queryInput.addEventListener("input", updateAlertLinks);
+  document.querySelector("form.form").addEventListener("change", updateAlertLinks);
+  updateAlertLinks();
   document.querySelectorAll("[data-toggle-group]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var on = btn.dataset.on === "1";
       document.querySelectorAll('[data-group="' + btn.dataset.toggleGroup + '"] input[type=checkbox]')
         .forEach(function (cb) { cb.checked = on; });
+      updateAlertLinks();
     });
   });
 </script>

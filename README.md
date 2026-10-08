@@ -50,6 +50,7 @@ per [ntfy](https://ntfy.sh) aufs Handy. Ziel: Dinge möglichst günstig bekommen
 | Graze | Shop (schema.org) | – | Imkereibedarf |
 | Kellmann | Shop (WooCommerce Store-API) | – | Imkereibedarf |
 | Mindfactory, Alternate, Refurbed | Shop (IT) | – | Alternate/Refurbed: immer Titelfilter, da sie ohne Treffer Ersatzprodukte zeigen |
+| MediaMarkt | Shop (IT) | – | immer Titelfilter (unscharfe Suche); Fremdhändler als "Marktplatz" markiert |
 | Shop Apotheke | Shop (Gesundheit) | – | immer Titelfilter (unscharfe Suche); gesponserte Kacheln werden übersprungen |
 | **Shop-URLs** | Produkt- oder Kategorieseiten | – | siehe unten |
 
@@ -64,11 +65,14 @@ eingetragen werden:
 - Vor jedem Abruf wird die `robots.txt` geprüft. Einziger Weg für **Recon Company**,
   **Alljagd**, **Living Active** und **Volber** (Suche per robots.txt gesperrt) sowie
   **TACWRK** (Suche läuft nur per JavaScript über einen Drittanbieter).
+  Ebenso für **Saturn** und **Coolblue** (Suche per robots.txt gesperrt, Produktseiten erlaubt).
 
 **Preisalarm-Mails (idealo, Geizhals):** Beide sperren automatische Abrufe (idealo: 403
 für jede Anfrage, Geizhals: Suche per robots.txt verboten). Stattdessen dort einen
 Preisalarm mit einer eigens angelegten Mailadresse einrichten und das Postfach unter
-**Einstellungen → Preisalarm-Postfach** eintragen. Jede Mail der letzten 30 Tage, deren
+**Einstellungen → Preisalarm-Postfach** eintragen. Unter **Suchen** zeigt jede Suche mit dieser Quelle (und das
+Formular) Direktlinks zur idealo- und Geizhals-Suche nach dem Suchbegriff, um den Alarm dort
+schnell anzulegen. Jede Mail der letzten 30 Tage, deren
 Betreff oder Text alle Suchwörter enthält, wird ein Treffer (Preis aus dem Betreff,
 Link zu idealo/Geizhals aus dem Text).
 

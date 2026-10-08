@@ -247,6 +247,42 @@ def parse_modified(html: str, site: str, base: str) -> list[Listing]:
     return results
 
 
+def parse_mediamarkt(html: str, site: str, base: str) -> list[Listing]:
+    """MediaMarkt (React, serverseitig gerendert). CSS-Klassen sind Hashes, deshalb nur data-test.
+    Preis-Block: optional Streichpreis (nach "UVP"/"statt"-Label), dann aktueller Preis."""
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    for card in soup.select("[data-test=mms-product-card]"):
+        title_el = card.select_one("[data-test=product-title]")
+        link = card.select_one("a[href*='/product/']")
+        price_box = card.select_one("[data-test=mms-price]")
+        if not title_el or not link or not price_box:
+            continue
+        prices = [s.get_text(" ", strip=True) for s in price_box.select("span[aria-hidden=true]")
+                  if "€" in s.get_text()]
+        if not prices:
+            continue
+        has_strike = price_box.select_one("[data-test=mms-strike-price-label]") is not None and len(prices) > 1
+        current = prices[-1] if has_strike else prices[0]
+        url = urljoin(base, str(link["href"])).split("?")[0]
+        m = re.search(r"-(\d+)\.html$", url)
+        delivery = card.select_one("[data-test=product-delivery]")
+        delivery_text = delivery.get_text(" ", strip=True).lower() if delivery else ""
+        results.append(Listing(
+            site=site,
+            ext_id=m.group(1) if m else url,
+            title=title_el.get_text(" ", strip=True),
+            url=url,
+            price=parse_price(current),
+            price_text=current + (f" (statt {prices[0]})" if has_strike else ""),
+            image=_img(card.select_one("[data-test=product-image] img, img"), base),
+            # Fremdhändler über den MediaMarkt-Marktplatz
+            condition="Marktplatz" if card.select_one("[data-test=mms-third-party-provider-link]") else "",
+            available=(not any(h in delivery_text for h in UNAVAILABLE_HINTS)) if delivery_text else None,
+        ))
+    return results
+
+
 def parse_cards(html: str, site: str, base: str, cfg: dict) -> list[Listing]:
     """Produktkacheln per CSS-Selektoren aus der Shop-Konfiguration.
 
@@ -399,6 +435,10 @@ SHOPS = {
                  "path": "/search/?query={q}", "parser": "cards",
                  "cards": {"card": "main.product-list-container article", "link": "a", "title": ["h3"],
                            "price": "span.font-semibold", "old": "del"}},
+    # sucht unscharf (zeigt z. B. fenix 9 zu "fenix 8"). Saturn (gleiche Plattform) und Coolblue
+    # sperren ihre Suche per robots.txt -> dort nur Produkt-URLs beobachten
+    "mediamarkt": {"label": "MediaMarkt", "base": "https://www.mediamarkt.de", "topics": ["it"], "fuzzy": True,
+                   "path": "/de/search.html?query={q}", "parser": parse_mediamarkt},
     "afb": {"label": "AfB (refurbished)", "base": "https://www.afbshop.de", "topics": ["it"],
             "path": "/search?search={q}", "parser": parse_sw6_boxes},
     # --- Gesundheit ---

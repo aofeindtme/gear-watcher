@@ -184,3 +184,10 @@ tr.level-warning td { color: var(--new); }
   .grid { grid-template-columns: 1fr; }
   .row { flex-direction: column; gap: 0; }
 }
+.alert-links { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.5rem; }
+.alert-links code { font-size: 0.8rem; }
+.form .alert-links { margin: -0.4rem 0 0.6rem 1.6rem; }
+.alert-links { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.5rem; }
+.alert-links[hidden] { display: none; }
+.alert-links code { font-size: 0.8rem; }
+.form .alert-links { margin: 0.2rem 0 0.8rem; }

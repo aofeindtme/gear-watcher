@@ -63,7 +63,19 @@ def _availability(value: str | None) -> bool | None:
     return None
 
 
-def _jsonld_product(soup) -> dict | None:
+def _pick_variant(group: dict, url: str) -> dict:
+    """ProductGroup (MediaMarkt/Saturn): die Variante dieser Seite, Name/Bild notfalls von der Gruppe."""
+    variants = [v for v in group.get("hasVariant") or [] if isinstance(v, dict)]
+    path = urlparse(url).path
+    variant = next((v for v in variants if isinstance(v.get("offers"), dict)
+                    and urlparse(str(v["offers"].get("url") or "")).path == path), None) \
+        or next((v for v in variants if v.get("sku") and path.endswith(f"-{v['sku']}.html")), None)
+    if not variant:
+        return group if group.get("offers") else (variants[0] if len(variants) == 1 else group)
+    return {"name": group.get("name"), "image": group.get("image"), **variant}
+
+
+def _jsonld_product(soup, url: str = "") -> dict | None:
     for tag in soup.find_all("script", type="application/ld+json"):
         try:
             data = json.loads(tag.string or "")
@@ -71,6 +83,11 @@ def _jsonld_product(soup) -> dict | None:
             continue
         items = data if isinstance(data, list) else data.get("@graph", [data]) if isinstance(data, dict) else []
         for item in items:
+            # MediaMarkt/Saturn verpacken das Produkt in eine BuyAction
+            if isinstance(item, dict) and isinstance(item.get("object"), dict):
+                item = item["object"]
+            if isinstance(item, dict) and "ProductGroup" in str(item.get("@type")):
+                return _pick_variant(item, url)
             if isinstance(item, dict) and "Product" in str(item.get("@type")):
                 return item
     return None
@@ -88,7 +105,7 @@ def parse_product_page(html: str, url: str) -> Listing | None:
         if avail_el:
             availability = _availability(avail_el.get("href") or avail_el.get("content"))
 
-    ld = _jsonld_product(soup)
+    ld = _jsonld_product(soup, url)
     if ld:
         title = ld.get("name")
         offers = ld.get("offers") or {}

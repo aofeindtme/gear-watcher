@@ -33,6 +33,15 @@
       </li>
     {% endfor %}
   </ul>
+  {% if 'mail' in active_sites(w) and w.query %}
+  <div class="alert-links small">
+    <span>Preisalarm anlegen:</span>
+    {% for label, href in price_alert_links(w.query) %}
+    <a href="{{ href }}" target="_blank" rel="noopener" class="button btn-small btn-secondary">{{ label }} ↗</a>
+    {% endfor %}
+    {% if '@' in alert_mailbox %}<span class="muted">an <code>{{ alert_mailbox }}</code></span>{% endif %}
+  </div>
+  {% endif %}
   <div class="actions">
     <form method="post" action="{{ url_for('watch_run', watch_id=w.id) }}" class="inline"><button type="submit" class="btn-small">Jetzt abrufen</button></form>
     <a href="{{ url_for('watch_form', watch_id=w.id) }}" class="button btn-small btn-secondary">Bearbeiten</a>
